@@ -1,0 +1,2 @@
+- payment field (where user can enter payment amount , method (cash , online ))
+- field to add discount on individual product or overall bill

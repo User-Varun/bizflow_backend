@@ -9,6 +9,7 @@ const ProductCatalog = sequelize.define("product_catalog", {
   },
   tenant_id: {
     type: DataTypes.UUID,
+    allowNull: false,
     references: {
       model: "tenants",
       key: "id",

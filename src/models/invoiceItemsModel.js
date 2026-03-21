@@ -59,7 +59,8 @@ const InvoiceItem = sequelize.define("invoice_item", {
     type: DataTypes.DOUBLE,
     allowNull: false,
   },
-  subtotal: {
+  total_amount: {
+    // this is total amount before adding gst and dicount
     type: DataTypes.DOUBLE,
     allowNull: false,
   },

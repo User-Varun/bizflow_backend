@@ -62,6 +62,10 @@ const Invoice = sequelize.define(
       type: DataTypes.DOUBLE,
       allowNull: false,
     },
+    sub_total: {
+      type: DataTypes.DOUBLE,
+      allowNull: false,
+    },
     pending_amount: { type: DataTypes.DOUBLE, allowNull: false },
     bill_state: {
       type: DataTypes.ENUM("pending", "partial", "paid"),

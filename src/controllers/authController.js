@@ -8,14 +8,14 @@ const jwt = require("jsonwebtoken");
 const { promisify } = require("util");
 const { generateSlug } = require("../utilities/generateTenantSlug");
 
-const signToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+const signToken = (userId, tenantId) => {
+  return jwt.sign({ userId, tenantId }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN,
   });
 };
 
 const createSendToken = ({ user, tenant }, req, res) => {
-  const token = signToken(user.id);
+  const token = signToken(user.id, tenant.id);
 
   res.cookie("jwt", token, {
     expires: new Date(
@@ -33,7 +33,7 @@ const createSendToken = ({ user, tenant }, req, res) => {
     status: "success",
     token,
     data: {
-      tenant, // if tenant obj is passed then it'll will show up in response otherwise ndot
+      tenant,
       user,
     },
   });
@@ -49,17 +49,21 @@ exports.login = catchAsync(async (req, res, next) => {
   if (!userData.email || !userData.password || !userData.tenant_slug)
     return next(new AppError("invalid email or password or slug!", 400));
 
-  // find user by tenant_slug (from tenant table) and email
+  const tenant = await Tenant.findOne({
+    where: { tenant_slug: userData.tenant_slug },
+  });
+
+  if (!tenant)
+    return next(
+      new AppError(
+        `no tenant found with the tenant code ${req.body.tenant_slug}`,
+        404,
+      ),
+    );
+
+  // find user by email and tenant id
   const user = await User.findOne({
-    where: { email: userData.email },
-    include: [
-      {
-        model: Tenant,
-        attributes: [],
-        where: { tenant_slug: userData.tenant_slug },
-        required: true,
-      },
-    ],
+    where: { email: userData.email, tenant_id: tenant.id },
   });
 
   if (!user) return next(new AppError("no user found with this email!", 404));
@@ -69,7 +73,7 @@ exports.login = catchAsync(async (req, res, next) => {
   if (!matched) return next(new AppError("passoword is invalid!", 400));
 
   // login the user
-  createSendToken({ user }, req, res);
+  createSendToken({ user, tenant }, req, res);
 });
 exports.register = catchAsync(async (req, res, next) => {
   // register flow
@@ -155,18 +159,26 @@ exports.protect = catchAsync(async (req, res, next) => {
   if (!matched)
     return next(new AppError("token expired! Please log in again.", 400));
 
-  // check if user still there
-  const user = await User.findByPk(matched.id);
+  // check if tenant and user still there
+  const tenant = await Tenant.findByPk(matched.tenantId);
+  const user = await User.findOne({
+    where: { id: matched.userId, tenant_id: matched.tenantId },
+  });
 
-  if (!user)
+  if (!user || !tenant)
     return next(
-      new AppError("user belongs to this token, no longer exist!", 400),
+      new AppError(
+        "user or tenant belongs to this token, no longer exist!",
+        400,
+      ),
     );
 
   // check if he changed password after token issued ( pending )
 
   // grant user acess
   req.user = user;
-  res.locals.user = user;
+  req.tenant = tenant;
+  // res.locals.user = user;
+  // res.locals.tenant = tenant;
   next();
 });

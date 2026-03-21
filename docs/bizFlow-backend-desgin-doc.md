@@ -124,9 +124,11 @@ Fields:
 - address_from
 - phone_to
 - phone_from
-- cgst_total
-- sgst_total
-- total_amount
+- cgst_total // in price
+- sgst_total // in price
+- discount_total // in price
+- sub_total ( total amount before adding gst and discount )
+- grand_total (after calc gst and discount )
 - pending_amount
 - bill_state (ENUM: pending, partial, paid)
 - created_at
@@ -149,11 +151,11 @@ Fields:
 - unit_qty
 - product_qty
 - rate
-- cgst
-- sgst
-- discount
+- cgst // in percentage
+- sgst // in percentage
+- discount // in percentage
 - MRP
-- subtotal
+- total_amount (rate \* product_qty)
 - created_at
 
 Note:
@@ -205,7 +207,7 @@ Fields:
 
 - id (PK, UUID)
 - invoice_id (FK -> invoices.id)
-- amount
+- amount ( expected from frontend to send amount = 0 by default & payment_method = 'cash' (in case of no money paid now ))
 - payment_method
 - created_at
 
