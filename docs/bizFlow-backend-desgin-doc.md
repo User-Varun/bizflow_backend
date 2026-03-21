@@ -145,7 +145,7 @@ Fields:
 - name
 - brand
 - hsn_code
-- unit_name
+- unit_name (ENUM: pcs , box , jar) // will add more as requested
 - unit_qty
 - product_qty
 - rate

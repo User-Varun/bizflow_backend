@@ -1,0 +1,2 @@
+exports.getBills = () => {};
+exports.getBillById = () => {};

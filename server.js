@@ -10,7 +10,7 @@ app.listen(port, async () => {
     console.log("DB connected successfully!");
     console.log("server listening at port " + port);
   } catch (err) {
-    console.log(err);
+    console.log(err.message);
     sequelize.close();
   }
 });
