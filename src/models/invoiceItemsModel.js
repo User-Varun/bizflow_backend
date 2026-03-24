@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
+const ProductCatalog = require("./productCatalogModel");
 
 const InvoiceItem = sequelize.define("invoice_item", {
   id: {
@@ -14,6 +15,16 @@ const InvoiceItem = sequelize.define("invoice_item", {
       model: "invoices",
       key: "id",
     },
+    onDelete: "CASCADE",
+  },
+  product_catalog_id: {
+    type: DataTypes.UUID,
+    references: {
+      model: "product_catalogs",
+      key: "id",
+    },
+    allowNull: true,
+    onDelete: "SET NULL",
   },
   name: {
     type: DataTypes.STRING(50),
@@ -68,3 +79,5 @@ const InvoiceItem = sequelize.define("invoice_item", {
 });
 
 module.exports = InvoiceItem;
+
+InvoiceItem.belongsTo(ProductCatalog, { foreignKey: "product_catalog_id" });

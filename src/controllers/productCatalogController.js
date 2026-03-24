@@ -4,8 +4,33 @@ const AppError = require("../utilities/appError");
 const ProductCatalog = require("../models/productCatalogModel");
 const { catchAsync } = require("../utilities/catchAsync");
 
-exports.getProducts = () => {};
-exports.getProductById = () => {};
+exports.getProducts = catchAsync(async (req, res) => {
+  const tenant = req.tenant;
+  const products = await ProductCatalog.findAll({
+    where: { tenant_id: tenant.id },
+  });
+
+  res.status(200).json({
+    status: "success",
+    length: products.length,
+    result: products,
+  });
+});
+exports.getProductById = catchAsync(async (req, res) => {
+  const tenant = req.tenant;
+  const productId = req.params.id;
+
+  if (!productId) throw new Error("product id is invalid!");
+
+  const product = await ProductCatalog.findOne({
+    where: { tenant_id: tenant.id, id: productId },
+  });
+
+  res.status(200).json({
+    status: "success",
+    result: product,
+  });
+});
 exports.addProduct = catchAsync(async (req, res, next) => {
   // get details from req.body
   const productDetails = {
@@ -41,4 +66,16 @@ exports.addProduct = catchAsync(async (req, res, next) => {
     product: product,
   });
 });
-exports.updateProductDetails = () => {};
+
+// exports.updateProductDetails = () => {}; // to be implemented later (if necessary )
+
+exports.deleteProductById = catchAsync(async (req, res) => {
+  const productId = req.params.id;
+  if (!productId) throw new Error("product id is invalid!");
+
+  await ProductCatalog.destroy({ where: { id: productId } });
+
+  res.status(200).send({
+    status: "success",
+  });
+});

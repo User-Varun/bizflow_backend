@@ -14,6 +14,15 @@ const Inventory = sequelize.define("inventory", {
       key: "id",
     },
   },
+  product_catalog_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: "product_catalogs",
+      key: "id",
+    },
+    onDelete: "SET NULL",
+  },
   name: {
     type: DataTypes.STRING(50),
     allowNull: false,

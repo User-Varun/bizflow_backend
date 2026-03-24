@@ -58,7 +58,7 @@ const Invoice = sequelize.define(
       type: DataTypes.DOUBLE,
       allowNull: false,
     },
-    total_amount: {
+    grand_total: {
       type: DataTypes.DOUBLE,
       allowNull: false,
     },

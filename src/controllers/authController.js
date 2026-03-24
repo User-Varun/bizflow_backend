@@ -105,9 +105,6 @@ exports.register = catchAsync(async (req, res, next) => {
   companyDetails.tenant_slug = generateSlug(req.body.cname);
 
   const { tenant, user } = await sequelize.transaction(async (transaction) => {
-    // sync the db first
-    await sequelize.sync();
-
     // creates tenant
     const tenant = await Tenant.create(companyDetails, { transaction });
 

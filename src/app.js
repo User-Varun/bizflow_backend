@@ -7,8 +7,8 @@ const cookieParser = require("cookie-parser");
 const DashboardRouter = require("./routes/dashboardRotues");
 const InventoryRouter = require("./routes/inventoryRoutes");
 const ProductCatalogRouter = require("./routes/productCatalogRoutes");
-const GenerateBillRouter = require("./routes/generateBillRoutes");
-const ViewBillsRouter = require("./routes/viewBillsRotues");
+const GenerateInvoicesRouter = require("./routes/generateInvoiceRoutes");
+const ViewInvoicesRouter = require("./routes/viewInvoicesRotues");
 const AuthRouter = require("./routes/authRoutes");
 
 app.use(express.json()); // json body parser
@@ -21,8 +21,8 @@ app.use("/api/v1/auth", AuthRouter);
 app.use("/api/v1/dashboard", DashboardRouter);
 app.use("/api/v1/inventory", InventoryRouter);
 app.use("/api/v1/productCatalog", ProductCatalogRouter);
-app.use("/api/v1/generateBill", GenerateBillRouter);
-app.use("/api/v1/viewBills", ViewBillsRouter);
+app.use("/api/v1/generateInvoice", GenerateInvoicesRouter);
+app.use("/api/v1/viewInvoices", ViewInvoicesRouter);
 
 // invalid routes
 app.use((req, _res, next) => {
@@ -38,6 +38,7 @@ app.use((err, _req, res, _next) => {
   res.status(statusCode).send({
     status,
     message,
+    stackTrace: err.stack,
   });
 });
 

@@ -358,7 +358,8 @@ Recommended endpoints:
 - POST /api/v1/productCatalog
 - GET /api/v1/productCatalog
 - GET /api/v1/productCatalog/:id
-- PATCH /api/v1/productCatalog/:id
+- PATCH /api/v1/productCatalog/:id // to be implemented later (if necessary )
+- DELETE /api/v1/productCatalog/:id
 
 Rules:
 
@@ -383,7 +384,7 @@ Rules:
 - Generate tenant-scoped invoice number inside same transaction.
 - On any failure, rollback full operation.
 
-## 12) View Bills Module (Brief)
+## 12) View invoices Module (Brief)
 
 Purpose:
 

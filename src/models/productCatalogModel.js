@@ -43,3 +43,7 @@ const ProductCatalog = sequelize.define("product_catalog", {
 });
 
 module.exports = ProductCatalog;
+
+const InvoiceItem = require("./invoiceItemsModel");
+
+ProductCatalog.hasMany(InvoiceItem, { foreignKey: "product_catalog_id" });

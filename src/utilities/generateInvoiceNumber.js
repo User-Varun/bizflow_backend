@@ -1,29 +1,33 @@
-const { catchAsync } = require("./catchAsync");
 const Invoice = require("../models/invoiceModel");
-const { Op } = require("sequelize");
+const { Op, literal } = require("sequelize");
 
-exports.generateInvoiceNumber = catchAsync(
-  async ({ tenantId, transaction }) => {
-    const year = new Date().getFullYear();
-    const prefix = `INV-${year}-`;
+exports.generateInvoiceNumber = async ({ tenantId, transaction }) => {
+  const year = new Date().getFullYear();
+  const prefix = `INV-${year}-`;
 
+  try {
     const lastInvoice = await Invoice.findOne({
       where: {
-        tenantId: tenantId,
+        tenant_id: tenantId,
         invoice_number: { [Op.like]: `${prefix}%` },
       },
       attributes: ["invoice_number"],
-      order: [["invoice_number", "DESC"]],
+      order: [
+        [
+          literal(`CAST(split_part("invoice_number", '-', 3) AS INTEGER)`),
+          "DESC",
+        ],
+      ],
       transaction,
       lock: transaction.LOCK.UPDATE,
     });
 
-    const lastSeq = lastInvoice
-      ? Number(lastInvoice.invoice_number.split("-")[2])
-      : 0;
-
+    const rawSeq = lastInvoice?.invoice_number?.split("-")[2];
+    const lastSeq = Number.isFinite(Number(rawSeq)) ? Number(rawSeq) : 0;
     const nextSeq = lastSeq + 1;
 
     return `${prefix}${String(nextSeq).padStart(3, "0")}`;
-  },
-);
+  } catch (err) {
+    throw err;
+  }
+};

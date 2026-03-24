@@ -14,6 +14,7 @@ const Payment = sequelize.define("payment", {
       model: "invoices",
       key: "id",
     },
+    onDelete: "CASCADE",
   },
   amount: {
     type: DataTypes.DOUBLE,
