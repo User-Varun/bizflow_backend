@@ -2,6 +2,7 @@ const express = require("express");
 const app = express();
 const AppError = require("./utilities/appError");
 const cookieParser = require("cookie-parser");
+const cors = require("cors");
 
 // Routers
 const DashboardRouter = require("./routes/dashboardRotues");
@@ -13,6 +14,12 @@ const AuthRouter = require("./routes/authRoutes");
 
 app.use(express.json()); // json body parser
 app.use(cookieParser()); // express cookie parser
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    credentials: true,
+  }),
+);
 
 // Auth Routes
 app.use("/api/v1/auth", AuthRouter);

@@ -24,6 +24,7 @@ const createSendToken = ({ user, tenant }, req, res) => {
     ),
     httpOnly: true,
     secure: req.secure || req.headers["x-forwarded-proto"] === "https",
+      sameSite: "lax",
   });
 
   // hide password
@@ -135,6 +136,7 @@ exports.logout = (_req, res, _next) => {
   res.cookie("jwt", "loggedOut", {
     expires: new Date(Date.now() + 10 * 1000),
     httpOnly: true,
+    sameSite: "lax",
   });
 
   res.status(200).json({
@@ -178,4 +180,16 @@ exports.protect = catchAsync(async (req, res, next) => {
   // res.locals.user = user;
   // res.locals.tenant = tenant;
   next();
+});
+
+exports.getMe = catchAsync(async (req, res, _next) => {
+  req.user.password = undefined;
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      user: req.user,
+      tenant: req.tenant,
+    },
+  });
 });

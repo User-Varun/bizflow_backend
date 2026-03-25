@@ -1,7 +1,7 @@
 const express = require("express");
 
 const router = express.Router();
-const viewInvoicesController = require("../controllers/viewInvoicesController");
+const viewInvoicesController = require("../controllers/viewInvoiesController");
 const authController = require("../controllers/authController");
 /*
 Recommended endpoints:

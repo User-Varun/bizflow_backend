@@ -6,6 +6,7 @@ const router = express.Router();
 router.post("/login", AuthController.login);
 router.post("/register", AuthController.register);
 router.post("/logout", AuthController.protect, AuthController.logout);
+router.get("/me", AuthController.protect, AuthController.getMe);
 
 // google api implementation remaining
 
