@@ -124,6 +124,7 @@ Fields:
 - address_from
 - phone_to
 - phone_from
+- other_party_gst (this is used when creating bill )
 - cgst_total // in price
 - sgst_total // in price
 - discount_total // in price

@@ -5,8 +5,10 @@ const AppError = require("../utilities/appError");
 const { generateInvoiceNumber } = require("../utilities/generateInvoiceNumber");
 const Payment = require("../models/paymentModel");
 const InvoiceItem = require("../models/invoiceItemsModel");
+const ProductCatalog = require("../models/productCatalogModel");
 const { calculateInvoiceData } = require("../utilities/calculateInvoiceData");
 const { updateInventory } = require("../utilities/updateInventory");
+const { Op } = require("sequelize");
 
 exports.generateInvoice = catchAsync(async (req, res, next) => {
   /* ### What is component does 
@@ -31,14 +33,24 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
 
   // auto-filling customer data based on invoice_type
   if (req.body.invoiceDetails.invoice_type === "stock_in") {
-    const { invoice_type, invoice_from, address_from, phone_from } =
-      req.body.invoiceDetails;
+    const {
+      invoice_type,
+      invoice_from,
+      address_from,
+      phone_from,
+      other_party_gst,
+    } = req.body.invoiceDetails;
+
+    if (!String(other_party_gst || "").trim()) {
+      throw new AppError("other party gst is required", 400);
+    }
 
     invoiceDetails = {
       invoice_type,
       invoice_from,
       address_from,
       phone_from,
+      other_party_gst: String(other_party_gst).trim(),
       invoice_to: cname,
       address_to: caddress,
       phone_to: cphone_number,
@@ -46,14 +58,19 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
   }
 
   if (req.body.invoiceDetails.invoice_type === "stock_out") {
-    const { invoice_type, invoice_to, address_to, phone_to } =
+    const { invoice_type, invoice_to, address_to, phone_to, other_party_gst } =
       req.body.invoiceDetails;
+
+    if (!String(other_party_gst || "").trim()) {
+      throw new AppError("other party gst is required", 400);
+    }
 
     invoiceDetails = {
       invoice_type,
       invoice_to,
       address_to,
       phone_to,
+      other_party_gst: String(other_party_gst).trim(),
       invoice_from: cname,
       address_from: caddress,
       phone_from: cphone_number,
@@ -100,10 +117,61 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
   if (amount == null || !payment_method)
     throw new AppError("invalid payments details", 400);
 
+  if (Number(amount) < 0) {
+    throw new AppError("payment amount cannot be less than zero", 400);
+  }
+
   // Starting Transaction in a loop to reduce concurreny issues (race condition)
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       result = await sequelize.transaction(async (transaction) => {
+        // Resolve product_catalog_id for every invoice item using only
+        // payload product_catalog_id; no fallback to inventory id.
+        const requestedCatalogIds = [
+          ...new Set(
+            invoiceItems.map((item) => item.product_catalog_id).filter(Boolean),
+          ),
+        ];
+
+        let validCatalogIdSet = new Set();
+        if (requestedCatalogIds.length > 0) {
+          const catalogRows = await ProductCatalog.findAll({
+            attributes: ["id"],
+            where: {
+              tenant_id: tenant.id,
+              id: { [Op.in]: requestedCatalogIds },
+            },
+            transaction,
+          });
+
+          validCatalogIdSet = new Set(catalogRows.map((row) => row.id));
+        }
+
+        const normalizedInvoiceItems = invoiceItems.map((item) => {
+          let resolvedProductCatalogId = null;
+
+          if (
+            item.product_catalog_id &&
+            validCatalogIdSet.has(item.product_catalog_id)
+          ) {
+            resolvedProductCatalogId = item.product_catalog_id;
+          }
+
+          if (item.product_catalog_id && !resolvedProductCatalogId) {
+            throw new AppError(
+              `invalid product_catalog_id for item: ${item.name}`,
+              400,
+            );
+          }
+
+          return {
+            ...item,
+            // Keep invoice history insertable even when product catalog rows
+            // were deleted; FK is nullable and old links can be null.
+            product_catalog_id: resolvedProductCatalogId,
+          };
+        });
+
         // generating invoice number (for invoice )
         const invoice_number = await generateInvoiceNumber({
           tenantId: tenant.id,
@@ -116,7 +184,7 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
           cgst_total,
           sgst_total,
           discount_total,
-        } = calculateInvoiceData(invoiceItems);
+        } = calculateInvoiceData(normalizedInvoiceItems);
 
         if (amount > grand_total) {
           throw new AppError(
@@ -173,17 +241,22 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
         }
 
         // adding invoice_id to every record
-        invoiceItems.forEach((item) => (item.invoice_id = invoiceRes.id));
+        normalizedInvoiceItems.forEach(
+          (item) => (item.invoice_id = invoiceRes.id),
+        );
 
         // create invoice_items
-        const invoiceItemsRes = await InvoiceItem.bulkCreate(invoiceItems, {
-          transaction,
-        });
+        const invoiceItemsRes = await InvoiceItem.bulkCreate(
+          normalizedInvoiceItems,
+          {
+            transaction,
+          },
+        );
 
         await updateInventory({
           tenantId: tenant.id,
           invoiceType: invoiceDetails.invoice_type,
-          invoiceItems,
+          invoiceItems: normalizedInvoiceItems,
           transaction,
         });
 

@@ -50,6 +50,10 @@ const Invoice = sequelize.define(
       type: DataTypes.STRING(50),
       allowNull: false,
     },
+    other_party_gst: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+    },
     cgst_total: {
       type: DataTypes.DOUBLE,
       allowNull: false,

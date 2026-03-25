@@ -20,6 +20,7 @@ Recommended filters:
 router.use(authController.protect);
 
 router.get("/", viewInvoicesController.getInvoices); // pagination 8 records (will adjust as needed)
+router.patch("/:id/pay", viewInvoicesController.addPaymentToInvoice);
 router.get("/:id", viewInvoicesController.getInvoiceById);
 
 module.exports = router;

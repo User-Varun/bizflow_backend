@@ -1,6 +1,8 @@
 const Invoice = require("../models/invoiceModel");
 const InvoiceItem = require("../models/invoiceItemsModel");
+const Payment = require("../models/paymentModel");
 const { catchAsync } = require("../utilities/catchAsync");
+const AppError = require("../utilities/appError");
 const { Op } = require("sequelize");
 
 exports.getInvoices = catchAsync(async (req, res) => {
@@ -109,11 +111,69 @@ exports.getInvoiceById = catchAsync(async (req, res) => {
 
   const result = {
     ...invoice.toJSON(),
+    company_gstin: tenant.gstin || "",
     invoice_items: invoiceItems,
   };
 
   res.status(200).json({
     status: "success",
     result,
+  });
+});
+
+exports.addPaymentToInvoice = catchAsync(async (req, res, next) => {
+  const tenant = req.tenant;
+  const invoiceId = req.params.id;
+
+  const amount = Number(req.body.amount);
+  const payment_method = String(req.body.payment_method || "cash");
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return next(new AppError("payment amount must be greater than zero", 400));
+  }
+
+  if (!["cash", "online", "check"].includes(payment_method)) {
+    return next(new AppError("invalid payment method", 400));
+  }
+
+  const invoice = await Invoice.findOne({
+    where: { id: invoiceId, tenant_id: tenant.id },
+  });
+
+  if (!invoice) {
+    return next(new AppError("invoice not found", 404));
+  }
+
+  if (invoice.pending_amount <= 0 || invoice.bill_state === "paid") {
+    return next(new AppError("invoice is already fully paid", 400));
+  }
+
+  if (amount > Number(invoice.pending_amount)) {
+    return next(
+      new AppError("payment amount cannot exceed pending bill amount", 400),
+    );
+  }
+
+  const nextPending = Number(invoice.pending_amount) - amount;
+  const nextBillState = nextPending === 0 ? "paid" : "partial";
+
+  await Payment.create({
+    invoice_id: invoice.id,
+    amount,
+    payment_method,
+  });
+
+  await invoice.update({
+    pending_amount: nextPending,
+    bill_state: nextBillState,
+  });
+
+  res.status(200).json({
+    status: "success",
+    result: {
+      id: invoice.id,
+      pending_amount: nextPending,
+      bill_state: nextBillState,
+    },
   });
 });
