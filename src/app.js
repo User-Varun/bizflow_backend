@@ -15,12 +15,15 @@ const AuthRouter = require("./routes/authRoutes");
 app.use(express.json()); // json body parser
 app.use(cookieParser()); // express cookie parser
 
-const allowedOrigins = ["https://bizflow-frontend-ww56.onrender.com"];
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://bizflow-frontend-ww56.onrender.com",
+];
 
 app.use(
   cors({
-    function(origin, callback) {
-      // allow requests with no origin (Postman, server-to-server, curl)
+    origin: (origin, callback) => {
+      // Allow tools like Postman / server-to-server (no browser origin)
       if (!origin) return callback(null, true);
 
       if (allowedOrigins.includes(origin)) {
@@ -29,9 +32,9 @@ app.use(
 
       return callback(new Error("Not allowed by CORS"));
     },
-    credentials: true, // keep true only if using cookies/session auth
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   }),
 );
 
