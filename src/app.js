@@ -15,31 +15,38 @@ const AuthRouter = require("./routes/authRoutes");
 app.use(express.json()); // json body parser
 app.use(cookieParser()); // express cookie parser
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://bizflow-frontend-ww56.onrender.com",
-];
+// Needed behind proxies (e.g. Render) so secure cookies / protocol checks work.
+app.set("trust proxy", 1);
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow tools like Postman / server-to-server (no browser origin)
-      if (!origin) return callback(null, true);
+const allowedOrigins = (
+  process.env.FRONTEND_URLS ||
+  process.env.FRONTEND_URL ||
+  "http://localhost:5173"
+)
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/$/, ""))
+  .filter(Boolean);
 
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow tools like Postman / server-to-server (no browser origin)
+    if (!origin) return callback(null, true);
 
-      return callback(new Error("Not allowed by CORS"));
-    },
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  }),
-);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 
 // Handle preflight across all routes
-app.options("*", cors());
+app.options("*", cors(corsOptions));
 
 // Auth Routes
 app.use("/api/v1/auth", AuthRouter);

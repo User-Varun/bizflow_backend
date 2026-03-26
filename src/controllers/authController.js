@@ -14,17 +14,30 @@ const signToken = (userId, tenantId) => {
   });
 };
 
+const getCookieOptions = (req, expires) => {
+  const isSecureRequest =
+    req.secure || req.headers["x-forwarded-proto"] === "https";
+
+  return {
+    expires,
+    httpOnly: true,
+    secure: isSecureRequest,
+    // Cross-site cookies (separate frontend/backend hosts) require SameSite=None + Secure.
+    sameSite: isSecureRequest ? "none" : "lax",
+  };
+};
+
 const createSendToken = ({ user, tenant }, req, res) => {
   const token = signToken(user.id, tenant.id);
 
   res.cookie("jwt", token, {
-    expires: new Date(
-      Date.now() +
-        process.env.JWT_EXPIRES_IN.split("d")[0] * 24 * 60 * 60 * 1000,
+    ...getCookieOptions(
+      req,
+      new Date(
+        Date.now() +
+          process.env.JWT_EXPIRES_IN.split("d")[0] * 24 * 60 * 60 * 1000,
+      ),
     ),
-    httpOnly: true,
-    secure: req.secure || req.headers["x-forwarded-proto"] === "https",
-      sameSite: "lax",
   });
 
   // hide password
@@ -133,11 +146,11 @@ exports.register = catchAsync(async (req, res, next) => {
 });
 exports.logout = (_req, res, _next) => {
   // reset the token
-  res.cookie("jwt", "loggedOut", {
-    expires: new Date(Date.now() + 10 * 1000),
-    httpOnly: true,
-    sameSite: "lax",
-  });
+  res.cookie(
+    "jwt",
+    "loggedOut",
+    getCookieOptions(_req, new Date(Date.now() + 10 * 1000)),
+  );
 
   res.status(200).json({
     status: "success",
