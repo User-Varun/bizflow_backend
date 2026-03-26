@@ -18,14 +18,17 @@ app.use(cookieParser()); // express cookie parser
 // Needed behind proxies (e.g. Render) so secure cookies / protocol checks work.
 app.set("trust proxy", 1);
 
-const allowedOrigins = (
-  process.env.FRONTEND_URLS ||
-  process.env.FRONTEND_URL ||
-  "http://localhost:5173"
-)
+const defaultAllowedOrigins = [
+  "http://localhost:5173",
+  "https://bizflow-frontend-ww56.onrender.com",
+];
+
+const configuredOrigins = `${process.env.FRONTEND_URLS || ""},${process.env.FRONTEND_URL || ""}`
   .split(",")
   .map((origin) => origin.trim().replace(/\/$/, ""))
   .filter(Boolean);
+
+const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...configuredOrigins])];
 
 const corsOptions = {
   origin: (origin, callback) => {
