@@ -38,6 +38,9 @@ app.use(
   }),
 );
 
+// Handle preflight across all routes
+app.options("*", cors());
+
 // Auth Routes
 app.use("/api/v1/auth", AuthRouter);
 
