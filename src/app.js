@@ -14,10 +14,24 @@ const AuthRouter = require("./routes/authRoutes");
 
 app.use(express.json()); // json body parser
 app.use(cookieParser()); // express cookie parser
+
+const allowedOrigins = ["https://bizflow-frontend-ww56.onrender.com"];
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
-    credentials: true,
+    function(origin, callback) {
+      // allow requests with no origin (Postman, server-to-server, curl)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true, // keep true only if using cookies/session auth
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
