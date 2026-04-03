@@ -1,4 +1,6 @@
 exports.calculateInvoiceData = function (invoiceItems) {
+  const roundToNearestDigit = (value) => Math.round(Number(value || 0));
+
   // calculate cgst
 
   let sub_total = 0;
@@ -20,10 +22,10 @@ exports.calculateInvoiceData = function (invoiceItems) {
   grand_total = sub_total + cgst_total + sgst_total - discount_total;
 
   return {
-    sub_total,
-    grand_total,
-    cgst_total,
-    sgst_total,
-    discount_total,
+    sub_total: roundToNearestDigit(sub_total),
+    grand_total: roundToNearestDigit(grand_total),
+    cgst_total: roundToNearestDigit(cgst_total),
+    sgst_total: roundToNearestDigit(sgst_total),
+    discount_total: roundToNearestDigit(discount_total),
   };
 };
