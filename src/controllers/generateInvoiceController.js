@@ -25,7 +25,9 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
   let invoiceDetails;
   let result;
   const rawCreatedAt = req.body?.invoiceDetails?.created_at;
-  const incomingDealerId = String(req.body?.invoiceDetails?.dealer_id || "").trim();
+  const incomingDealerId = String(
+    req.body?.invoiceDetails?.dealer_id || "",
+  ).trim();
   let createdAtOverride = null;
 
   if (rawCreatedAt) {
@@ -56,10 +58,7 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
   });
 
   if (!selectedDealer) {
-    throw new AppError(
-      "invalid dealer selection for this invoice type",
-      400,
-    );
+    throw new AppError("invalid dealer selection for this invoice type", 400);
   }
 
   if (

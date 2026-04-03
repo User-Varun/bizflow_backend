@@ -471,7 +471,8 @@ exports.getDealerLedgerStatement = catchAsync(async (req, res, next) => {
   ];
 
   rows.sort((a, b) => {
-    const timeDiff = new Date(a.event_at).getTime() - new Date(b.event_at).getTime();
+    const timeDiff =
+      new Date(a.event_at).getTime() - new Date(b.event_at).getTime();
     if (timeDiff !== 0) return timeDiff;
     if (a.row_type === b.row_type) return 0;
     return a.row_type === "invoice" ? -1 : 1;

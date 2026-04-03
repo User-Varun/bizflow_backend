@@ -5,7 +5,9 @@ const Dealer = require("../src/models/dealerModel");
 const Invoice = require("../src/models/invoiceModel");
 
 function normalizeDealerSnapshot(invoice) {
-  const invoiceType = String(invoice.invoice_type || "").trim().toLowerCase();
+  const invoiceType = String(invoice.invoice_type || "")
+    .trim()
+    .toLowerCase();
 
   const source =
     invoiceType === "stock_out"
