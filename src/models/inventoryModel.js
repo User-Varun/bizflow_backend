@@ -24,11 +24,11 @@ const Inventory = sequelize.define("inventory", {
     onDelete: "SET NULL",
   },
   name: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(120),
     allowNull: false,
   },
   brand: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(120),
     allowNull: false,
   },
   product_qty: {
@@ -36,11 +36,11 @@ const Inventory = sequelize.define("inventory", {
     allowNull: false,
   },
   hsn_code: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(20),
     allowNull: false,
   },
   unit_name: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(80),
     allowNull: false,
   },
   unit_qty: {
@@ -50,6 +50,10 @@ const Inventory = sequelize.define("inventory", {
   mrp: {
     type: DataTypes.DOUBLE,
     allowNull: false,
+  },
+  rate: {
+    type: DataTypes.DOUBLE,
+    allowNull: true,
   },
 
   // timestamps are added by default by ORM

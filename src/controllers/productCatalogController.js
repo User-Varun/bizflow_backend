@@ -22,12 +22,14 @@ exports.getProducts = catchAsync(async (req, res) => {
     ];
   }
 
-  const { count: total, rows: products } = await ProductCatalog.findAndCountAll({
-    where,
-    limit: pageSize,
-    offset,
-    order: [["createdAt", "DESC"]],
-  });
+  const { count: total, rows: products } = await ProductCatalog.findAndCountAll(
+    {
+      where,
+      limit: pageSize,
+      offset,
+      order: [["createdAt", "DESC"]],
+    },
+  );
 
   res.status(200).json({
     status: "success",
@@ -60,20 +62,33 @@ exports.addProduct = catchAsync(async (req, res, next) => {
     name: req.body.name,
     brand: req.body.brand,
     mrp: req.body.mrp,
+    rate: req.body.rate,
     hsn_code: req.body.hsn_code,
     unit_name: req.body.unit_name,
     unit_qty: req.body.unit_qty,
   };
 
+  const parsedMrp = Number(productDetails.mrp);
+  const parsedRate = Number(productDetails.rate);
+  const parsedUnitQty = Number(productDetails.unit_qty);
+
   if (
     !productDetails.name ||
     !productDetails.brand ||
-    !productDetails.mrp ||
+    !Number.isFinite(parsedMrp) ||
+    parsedMrp < 0 ||
+    !Number.isFinite(parsedRate) ||
+    parsedRate < 0 ||
     !productDetails.hsn_code ||
     !productDetails.unit_name ||
-    !productDetails.unit_qty
+    !Number.isFinite(parsedUnitQty) ||
+    parsedUnitQty <= 0
   )
     return next(new AppError("invalid product details!", 400));
+
+  productDetails.mrp = parsedMrp;
+  productDetails.rate = parsedRate;
+  productDetails.unit_qty = parsedUnitQty;
 
   // add tenant id to the product
   const tenantId = req.tenant.id;
@@ -100,20 +115,33 @@ exports.updateProductDetails = catchAsync(async (req, res, next) => {
     name: req.body.name,
     brand: req.body.brand,
     mrp: req.body.mrp,
+    rate: req.body.rate,
     hsn_code: req.body.hsn_code,
     unit_name: req.body.unit_name,
     unit_qty: req.body.unit_qty,
   };
 
+  const parsedMrp = Number(productDetails.mrp);
+  const parsedRate = Number(productDetails.rate);
+  const parsedUnitQty = Number(productDetails.unit_qty);
+
   if (
     !productDetails.name ||
     !productDetails.brand ||
-    !productDetails.mrp ||
+    !Number.isFinite(parsedMrp) ||
+    parsedMrp < 0 ||
+    !Number.isFinite(parsedRate) ||
+    parsedRate < 0 ||
     !productDetails.hsn_code ||
     !productDetails.unit_name ||
-    !productDetails.unit_qty
+    !Number.isFinite(parsedUnitQty) ||
+    parsedUnitQty <= 0
   )
     return next(new AppError("invalid product details!", 400));
+
+  productDetails.mrp = parsedMrp;
+  productDetails.rate = parsedRate;
+  productDetails.unit_qty = parsedUnitQty;
 
   const [updatedRows] = await ProductCatalog.update(productDetails, {
     where: { id: productId, tenant_id: tenant.id },
@@ -136,7 +164,9 @@ exports.deleteProductById = catchAsync(async (req, res) => {
   const productId = req.params.id;
   if (!productId) throw new Error("product id is invalid!");
 
-  await ProductCatalog.destroy({ where: { id: productId, tenant_id: tenant.id } });
+  await ProductCatalog.destroy({
+    where: { id: productId, tenant_id: tenant.id },
+  });
 
   res.status(200).send({
     status: "success",

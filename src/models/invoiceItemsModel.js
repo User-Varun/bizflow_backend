@@ -27,19 +27,19 @@ const InvoiceItem = sequelize.define("invoice_item", {
     onDelete: "SET NULL",
   },
   name: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(120),
     allowNull: false,
   },
   brand: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(120),
     allowNull: false,
   },
   hsn_code: {
-    type: DataTypes.STRING(50), // have to look this up (how many digits hsn_code have)
+    type: DataTypes.STRING(20), // have to look this up (how many digits hsn_code have)
     allowNull: false,
   },
   unit_name: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(80),
     allowNull: false,
   },
   unit_qty: {

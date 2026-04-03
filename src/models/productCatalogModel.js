@@ -16,23 +16,28 @@ const ProductCatalog = sequelize.define("product_catalog", {
     },
   },
   name: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(120),
     allowNull: false,
   },
   brand: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(120),
     allowNull: false,
   },
   mrp: {
     type: DataTypes.DOUBLE,
     allowNull: false,
   },
+  rate: {
+    type: DataTypes.DOUBLE,
+    allowNull: false,
+    defaultValue: 0,
+  },
   hsn_code: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(20),
     allowNull: false,
   },
   unit_name: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(80),
     allowNull: false,
   },
   unit_qty: {

@@ -14,10 +14,17 @@ exports.getInvoices = catchAsync(async (req, res) => {
   );
   const search = String(req.query.search || "").trim();
   const searchFilter = String(req.query.searchFilter || "invoice_number");
+  const billType = String(req.query.billType || "all")
+    .trim()
+    .toLowerCase();
 
   const where = {
     tenant_id: tenant.id,
   };
+
+  if (billType === "stock_in" || billType === "stock_out") {
+    where.invoice_type = billType;
+  }
 
   if (search) {
     if (searchFilter === "invoice_number") {

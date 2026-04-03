@@ -18,16 +18,16 @@ const Tenant = sequelize.define("tenant", {
   },
 
   cname: {
-    type: DataTypes.STRING,
+    type: DataTypes.STRING(120),
   },
   caddress: {
-    type: DataTypes.STRING,
+    type: DataTypes.STRING(255),
   },
   cphone_number: {
-    type: DataTypes.STRING,
+    type: DataTypes.STRING(20),
   },
   gstin: {
-    type: DataTypes.STRING,
+    type: DataTypes.STRING(20),
   },
   account_number: {
     type: DataTypes.STRING(34),
