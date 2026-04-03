@@ -1,4 +1,4 @@
-const { DataTypes, UUIDV4 } = require("sequelize");
+const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
 
 const Invoice = sequelize.define(
@@ -25,6 +25,15 @@ const Invoice = sequelize.define(
     invoice_type: {
       type: DataTypes.ENUM("stock_in", "stock_out"),
       allowNull: false,
+    },
+    dealer_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: "dealers",
+        key: "id",
+      },
+      onDelete: "RESTRICT",
     },
     invoice_to: {
       type: DataTypes.STRING(120),

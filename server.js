@@ -124,6 +124,42 @@ async function ensureDealerTable() {
   `);
 }
 
+async function ensureInvoiceDealerColumn() {
+  await sequelize.query(`
+    ALTER TABLE "invoices"
+    ADD COLUMN IF NOT EXISTS "dealer_id" UUID;
+  `);
+
+  await sequelize.query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'invoices_dealer_id_fkey'
+      ) THEN
+        ALTER TABLE "invoices"
+        ADD CONSTRAINT "invoices_dealer_id_fkey"
+        FOREIGN KEY ("dealer_id") REFERENCES "dealers"("id") ON DELETE RESTRICT;
+      END IF;
+    END $$;
+  `);
+
+  await sequelize.query(`
+    CREATE INDEX IF NOT EXISTS "invoices_tenant_dealer_type_created_idx"
+    ON "invoices" ("tenant_id", "dealer_id", "invoice_type", "createdAt");
+  `);
+
+  await sequelize.query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM "invoices" WHERE "dealer_id" IS NULL
+      ) THEN
+        ALTER TABLE "invoices"
+        ALTER COLUMN "dealer_id" SET NOT NULL;
+      END IF;
+    END $$;
+  `);
+}
+
 async function server() {
   try {
     await sequelize.authenticate();
@@ -133,6 +169,7 @@ async function server() {
     await ensureTenantPaymentColumns();
     await ensureProductCatalogRateColumn();
     await ensureDealerTable();
+    await ensureInvoiceDealerColumn();
 
     app.listen(port, () => {
       console.log("DB connected successfully!");

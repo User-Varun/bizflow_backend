@@ -6,6 +6,7 @@ const { generateInvoiceNumber } = require("../utilities/generateInvoiceNumber");
 const Payment = require("../models/paymentModel");
 const InvoiceItem = require("../models/invoiceItemsModel");
 const ProductCatalog = require("../models/productCatalogModel");
+const Dealer = require("../models/dealerModel");
 const { calculateInvoiceData } = require("../utilities/calculateInvoiceData");
 const { updateInventory } = require("../utilities/updateInventory");
 const { Op } = require("sequelize");
@@ -24,6 +25,7 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
   let invoiceDetails;
   let result;
   const rawCreatedAt = req.body?.invoiceDetails?.created_at;
+  const incomingDealerId = String(req.body?.invoiceDetails?.dealer_id || "").trim();
   let createdAtOverride = null;
 
   if (rawCreatedAt) {
@@ -41,26 +43,49 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
     throw new AppError("invalid invoice type!", 400);
   }
 
+  if (!incomingDealerId) {
+    throw new AppError("dealer_id is required", 400);
+  }
+
+  const selectedDealer = await Dealer.findOne({
+    where: {
+      id: incomingDealerId,
+      tenant_id: tenant.id,
+      invoice_type: req.body.invoiceDetails.invoice_type,
+    },
+  });
+
+  if (!selectedDealer) {
+    throw new AppError(
+      "invalid dealer selection for this invoice type",
+      400,
+    );
+  }
+
+  if (
+    !String(selectedDealer.name || "").trim() ||
+    !String(selectedDealer.phone || "").trim()
+  ) {
+    throw new AppError("selected dealer details are incomplete", 400);
+  }
+
+  if (!String(selectedDealer.gst || "").trim()) {
+    throw new AppError("selected dealer gst is required", 400);
+  }
+
   // auto-filling customer data based on invoice_type
   if (req.body.invoiceDetails.invoice_type === "stock_in") {
-    const {
-      invoice_type,
-      invoice_from,
-      address_from,
-      phone_from,
-      other_party_gst,
-    } = req.body.invoiceDetails;
-
-    if (!String(other_party_gst || "").trim()) {
-      throw new AppError("other party gst is required", 400);
-    }
+    const { invoice_type } = req.body.invoiceDetails;
 
     invoiceDetails = {
       invoice_type,
-      invoice_from,
-      address_from,
-      phone_from,
-      other_party_gst: String(other_party_gst).trim(),
+      dealer_id: selectedDealer.id,
+      invoice_from: String(selectedDealer.name || "").trim(),
+      address_from: String(selectedDealer.address || "").trim(),
+      phone_from: String(selectedDealer.phone || "").trim(),
+      other_party_gst: String(selectedDealer.gst || "")
+        .trim()
+        .toUpperCase(),
       invoice_to: cname,
       address_to: caddress,
       phone_to: cphone_number,
@@ -68,19 +93,17 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
   }
 
   if (req.body.invoiceDetails.invoice_type === "stock_out") {
-    const { invoice_type, invoice_to, address_to, phone_to, other_party_gst } =
-      req.body.invoiceDetails;
-
-    if (!String(other_party_gst || "").trim()) {
-      throw new AppError("other party gst is required", 400);
-    }
+    const { invoice_type } = req.body.invoiceDetails;
 
     invoiceDetails = {
       invoice_type,
-      invoice_to,
-      address_to,
-      phone_to,
-      other_party_gst: String(other_party_gst).trim(),
+      dealer_id: selectedDealer.id,
+      invoice_to: String(selectedDealer.name || "").trim(),
+      address_to: String(selectedDealer.address || "").trim(),
+      phone_to: String(selectedDealer.phone || "").trim(),
+      other_party_gst: String(selectedDealer.gst || "")
+        .trim()
+        .toUpperCase(),
       invoice_from: cname,
       address_from: caddress,
       phone_from: cphone_number,

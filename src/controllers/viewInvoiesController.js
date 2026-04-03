@@ -2,6 +2,7 @@ const Invoice = require("../models/invoiceModel");
 const InvoiceItem = require("../models/invoiceItemsModel");
 const Payment = require("../models/paymentModel");
 const Inventory = require("../models/inventoryModel");
+const Dealer = require("../models/dealerModel");
 const { catchAsync } = require("../utilities/catchAsync");
 const AppError = require("../utilities/appError");
 const { calculateInvoiceData } = require("../utilities/calculateInvoiceData");
@@ -167,6 +168,7 @@ exports.getInvoices = catchAsync(async (req, res) => {
   const billType = String(req.query.billType || "all")
     .trim()
     .toLowerCase();
+  const dealerId = String(req.query.dealerId || "").trim();
 
   const where = {
     tenant_id: tenant.id,
@@ -174,6 +176,29 @@ exports.getInvoices = catchAsync(async (req, res) => {
 
   if (billType === "stock_in" || billType === "stock_out") {
     where.invoice_type = billType;
+  }
+
+  if (dealerId) {
+    const dealer = await Dealer.findOne({
+      where: {
+        id: dealerId,
+        tenant_id: tenant.id,
+      },
+      attributes: ["id"],
+    });
+
+    if (!dealer) {
+      return res.status(200).json({
+        status: "success",
+        page,
+        pageSize,
+        total: 0,
+        totalPages: 0,
+        result: [],
+      });
+    }
+
+    where.dealer_id = dealerId;
   }
 
   if (search) {
