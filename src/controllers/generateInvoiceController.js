@@ -23,6 +23,16 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
   const { cname, caddress, cphone_number } = tenant;
   let invoiceDetails;
   let result;
+  const rawCreatedAt = req.body?.invoiceDetails?.created_at;
+  let createdAtOverride = null;
+
+  if (rawCreatedAt) {
+    const parsed = new Date(rawCreatedAt);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new AppError("invalid created_at value", 400);
+    }
+    createdAtOverride = parsed;
+  }
 
   if (
     req.body.invoiceDetails.invoice_type !== "stock_in" &&
@@ -216,6 +226,7 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
         const invoiceRes = await Invoice.create(
           {
             ...invoiceDetails,
+            ...(createdAtOverride ? { createdAt: createdAtOverride } : {}),
             pending_amount,
             bill_state,
             sub_total,

@@ -112,6 +112,10 @@ exports.getInvoiceById = catchAsync(async (req, res) => {
   const result = {
     ...invoice.toJSON(),
     company_gstin: tenant.gstin || "",
+    account_number: tenant.account_number || "",
+    ifsc_code: tenant.ifsc_code || "",
+    qr_url: tenant.qr_url || "",
+    tenant_payment_updated_at: tenant.updatedAt || null,
     invoice_items: invoiceItems,
   };
 
@@ -174,6 +178,52 @@ exports.addPaymentToInvoice = catchAsync(async (req, res, next) => {
       id: invoice.id,
       pending_amount: nextPending,
       bill_state: nextBillState,
+    },
+  });
+});
+
+exports.updateInvoiceDate = catchAsync(async (req, res, next) => {
+  const tenant = req.tenant;
+  const invoiceId = req.params.id;
+  const rawDate = String(req.body.created_at || "").trim();
+
+  if (!rawDate) {
+    return next(new AppError("created_at is required", 400));
+  }
+
+  const parsed = new Date(rawDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return next(new AppError("invalid created_at value", 400));
+  }
+
+  const [rows] = await Invoice.sequelize.query(
+    `
+      UPDATE "invoices"
+      SET "createdAt" = :createdAt
+      WHERE "id" = :invoiceId
+        AND "tenant_id" = :tenantId
+      RETURNING "id", "createdAt";
+    `,
+    {
+      replacements: {
+        createdAt: parsed,
+        invoiceId,
+        tenantId: tenant.id,
+      },
+    },
+  );
+
+  if (!rows || rows.length === 0) {
+    return next(new AppError("invoice not found", 404));
+  }
+
+  const updatedInvoice = rows[0];
+
+  res.status(200).json({
+    status: "success",
+    result: {
+      id: updatedInvoice.id,
+      createdAt: updatedInvoice.createdAt,
     },
   });
 });

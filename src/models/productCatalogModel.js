@@ -32,7 +32,7 @@ const ProductCatalog = sequelize.define("product_catalog", {
     allowNull: false,
   },
   unit_name: {
-    type: DataTypes.ENUM("pcs", "box", "jar"),
+    type: DataTypes.STRING(50),
     allowNull: false,
   },
   unit_qty: {

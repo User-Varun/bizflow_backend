@@ -8,6 +8,35 @@ const jwt = require("jsonwebtoken");
 const { promisify } = require("util");
 const { generateSlug } = require("../utilities/generateTenantSlug");
 
+const normalizeTenantPaymentDetails = (payload = {}) => {
+  const account_number = String(payload.account_number || "")
+    .replace(/\s+/g, "")
+    .trim();
+  const ifsc_code = String(payload.ifsc_code || "")
+    .replace(/\s+/g, "")
+    .toUpperCase();
+  const qr_url = String(payload.qr_url || "").trim();
+
+  return {
+    account_number,
+    ifsc_code,
+    qr_url,
+  };
+};
+
+const assertMandatoryTenantPaymentDetails = (details) => {
+  if (!details.account_number || !details.ifsc_code || !details.qr_url) {
+    throw new AppError(
+      "account number, IFSC code and QR URL are mandatory",
+      400,
+    );
+  }
+
+  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(details.ifsc_code)) {
+    throw new AppError("invalid IFSC code format", 400);
+  }
+};
+
 const signToken = (userId, tenantId) => {
   return jwt.sign({ userId, tenantId }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN,
@@ -97,6 +126,7 @@ exports.register = catchAsync(async (req, res, next) => {
     caddress: req.body.caddress,
     cphone_number: req.body.cphone_number,
     gstin: req.body.gstin,
+    ...normalizeTenantPaymentDetails(req.body),
   };
 
   const userDetails = {
@@ -109,11 +139,16 @@ exports.register = catchAsync(async (req, res, next) => {
     !companyDetails.caddress ||
     !companyDetails.cphone_number ||
     !companyDetails.gstin ||
+    !companyDetails.account_number ||
+    !companyDetails.ifsc_code ||
+    !companyDetails.qr_url ||
     !userDetails.email ||
     !userDetails.password
   ) {
     return next(new AppError("invalid details", 400));
   }
+
+  assertMandatoryTenantPaymentDetails(companyDetails);
 
   // add the slug
   companyDetails.tenant_slug = generateSlug(req.body.cname);
@@ -196,6 +231,27 @@ exports.protect = catchAsync(async (req, res, next) => {
 });
 
 exports.getMe = catchAsync(async (req, res, _next) => {
+  req.user.password = undefined;
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      user: req.user,
+      tenant: req.tenant,
+    },
+  });
+});
+
+exports.updateTenantPaymentDetails = catchAsync(async (req, res, next) => {
+  if (req.user.role !== "owner") {
+    return next(new AppError("only owner can update tenant details", 403));
+  }
+
+  const paymentDetails = normalizeTenantPaymentDetails(req.body);
+  assertMandatoryTenantPaymentDetails(paymentDetails);
+
+  await req.tenant.update(paymentDetails);
+  await req.tenant.reload();
   req.user.password = undefined;
 
   res.status(200).json({
