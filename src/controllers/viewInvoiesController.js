@@ -12,10 +12,18 @@ function itemIdentityKey(item) {
 
   return [
     "manual",
-    String(item.name || "").trim().toLowerCase(),
-    String(item.brand || "").trim().toLowerCase(),
-    String(item.hsn_code || "").trim().toLowerCase(),
-    String(item.unit_name || "").trim().toLowerCase(),
+    String(item.name || "")
+      .trim()
+      .toLowerCase(),
+    String(item.brand || "")
+      .trim()
+      .toLowerCase(),
+    String(item.hsn_code || "")
+      .trim()
+      .toLowerCase(),
+    String(item.unit_name || "")
+      .trim()
+      .toLowerCase(),
     Number(item.unit_qty || 0),
   ].join("::");
 }
@@ -423,16 +431,8 @@ exports.editInvoice = catchAsync(async (req, res, next) => {
         product_qty: Number(item.product_qty || 0),
         rate: Number(item.rate || 0),
         mrp: Number(item.mrp || 0),
-        cgst: Number(
-          item.cgst ??
-            req.body?.taxDetails?.cgst ??
-            defaultCgst,
-        ),
-        sgst: Number(
-          item.sgst ??
-            req.body?.taxDetails?.sgst ??
-            defaultSgst,
-        ),
+        cgst: Number(item.cgst ?? req.body?.taxDetails?.cgst ?? defaultCgst),
+        sgst: Number(item.sgst ?? req.body?.taxDetails?.sgst ?? defaultSgst),
         discount: Number(item.discount || 0),
         product_catalog_id: item.product_catalog_id || null,
       };
@@ -527,7 +527,8 @@ exports.editInvoice = catchAsync(async (req, res, next) => {
               req.body?.invoiceDetails?.phone_to ?? invoice.phone_to,
             ).trim(),
             other_party_gst: String(
-              req.body?.invoiceDetails?.other_party_gst ?? invoice.other_party_gst,
+              req.body?.invoiceDetails?.other_party_gst ??
+                invoice.other_party_gst,
             )
               .trim()
               .toUpperCase(),
@@ -543,7 +544,8 @@ exports.editInvoice = catchAsync(async (req, res, next) => {
               req.body?.invoiceDetails?.phone_from ?? invoice.phone_from,
             ).trim(),
             other_party_gst: String(
-              req.body?.invoiceDetails?.other_party_gst ?? invoice.other_party_gst,
+              req.body?.invoiceDetails?.other_party_gst ??
+                invoice.other_party_gst,
             )
               .trim()
               .toUpperCase(),
