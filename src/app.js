@@ -10,6 +10,7 @@ const InventoryRouter = require("./routes/inventoryRoutes");
 const ProductCatalogRouter = require("./routes/productCatalogRoutes");
 const GenerateInvoicesRouter = require("./routes/generateInvoiceRoutes");
 const ViewInvoicesRouter = require("./routes/viewInvoicesRotues");
+const DealersRouter = require("./routes/dealerRoutes");
 const AuthRouter = require("./routes/authRoutes");
 
 app.get("/api/v1/health", (req, res) => {
@@ -72,6 +73,7 @@ app.use("/api/v1/inventory", InventoryRouter);
 app.use("/api/v1/productCatalog", ProductCatalogRouter);
 app.use("/api/v1/generateInvoice", GenerateInvoicesRouter);
 app.use("/api/v1/viewInvoices", ViewInvoicesRouter);
+app.use("/api/v1/dealers", DealersRouter);
 
 // invalid routes
 app.use((req, _res, next) => {

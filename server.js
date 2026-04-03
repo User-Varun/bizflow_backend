@@ -90,6 +90,40 @@ async function ensureProductCatalogRateColumn() {
   `);
 }
 
+async function ensureDealerTable() {
+  await sequelize.query(`
+    DO $$ BEGIN
+      CREATE TYPE "enum_dealers_invoice_type" AS ENUM ('stock_in', 'stock_out');
+    EXCEPTION
+      WHEN duplicate_object THEN null;
+    END $$;
+  `);
+
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS "dealers" (
+      "id" UUID PRIMARY KEY,
+      "tenant_id" UUID NOT NULL REFERENCES "tenants"("id") ON DELETE CASCADE,
+      "invoice_type" "enum_dealers_invoice_type" NOT NULL,
+      "name" VARCHAR(120) NOT NULL,
+      "address" VARCHAR(255) DEFAULT '',
+      "phone" VARCHAR(20) NOT NULL,
+      "gst" VARCHAR(20) DEFAULT '',
+      "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+      "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL
+    );
+  `);
+
+  await sequelize.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "dealers_tenant_invoice_name_phone_uq"
+    ON "dealers" ("tenant_id", "invoice_type", "name", "phone");
+  `);
+
+  await sequelize.query(`
+    CREATE INDEX IF NOT EXISTS "dealers_tenant_invoice_updated_idx"
+    ON "dealers" ("tenant_id", "invoice_type", "updatedAt");
+  `);
+}
+
 async function server() {
   try {
     await sequelize.authenticate();
@@ -98,6 +132,7 @@ async function server() {
     await normalizeStringLengthColumns();
     await ensureTenantPaymentColumns();
     await ensureProductCatalogRateColumn();
+    await ensureDealerTable();
 
     app.listen(port, () => {
       console.log("DB connected successfully!");
