@@ -1,9 +1,151 @@
 const Invoice = require("../models/invoiceModel");
 const InvoiceItem = require("../models/invoiceItemsModel");
 const Payment = require("../models/paymentModel");
+const Inventory = require("../models/inventoryModel");
 const { catchAsync } = require("../utilities/catchAsync");
 const AppError = require("../utilities/appError");
+const { calculateInvoiceData } = require("../utilities/calculateInvoiceData");
 const { Op } = require("sequelize");
+
+function itemIdentityKey(item) {
+  if (item.product_catalog_id) return `catalog:${item.product_catalog_id}`;
+
+  return [
+    "manual",
+    String(item.name || "").trim().toLowerCase(),
+    String(item.brand || "").trim().toLowerCase(),
+    String(item.hsn_code || "").trim().toLowerCase(),
+    String(item.unit_name || "").trim().toLowerCase(),
+    Number(item.unit_qty || 0),
+  ].join("::");
+}
+
+function buildQtyMap(items) {
+  const map = new Map();
+
+  for (const item of items) {
+    const key = itemIdentityKey(item);
+    const qty = Number(item.product_qty || 0);
+    const existing = map.get(key);
+
+    if (existing) {
+      existing.product_qty += qty;
+      map.set(key, existing);
+      continue;
+    }
+
+    map.set(key, {
+      ...item,
+      product_qty: qty,
+    });
+  }
+
+  return map;
+}
+
+async function applyInventoryDelta({
+  tenantId,
+  invoiceType,
+  oldItems,
+  newItems,
+  transaction,
+}) {
+  const oldMap = buildQtyMap(oldItems);
+  const newMap = buildQtyMap(newItems);
+  const keys = new Set([...oldMap.keys(), ...newMap.keys()]);
+
+  for (const key of keys) {
+    const oldItem = oldMap.get(key);
+    const newItem = newMap.get(key);
+    const oldQty = Number(oldItem?.product_qty || 0);
+    const newQty = Number(newItem?.product_qty || 0);
+
+    // stock_in adds quantity; stock_out deducts quantity
+    const deltaQty =
+      invoiceType === "stock_in" ? newQty - oldQty : oldQty - newQty;
+
+    if (deltaQty === 0) continue;
+
+    const refItem = newItem || oldItem;
+    let inventoryItem = null;
+
+    if (refItem?.product_catalog_id) {
+      inventoryItem = await Inventory.findOne({
+        where: {
+          tenant_id: tenantId,
+          product_catalog_id: refItem.product_catalog_id,
+        },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+    }
+
+    if (!inventoryItem) {
+      inventoryItem = await Inventory.findOne({
+        where: {
+          tenant_id: tenantId,
+          name: refItem.name,
+          brand: refItem.brand,
+          hsn_code: refItem.hsn_code,
+          unit_name: refItem.unit_name,
+          unit_qty: refItem.unit_qty,
+        },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+    }
+
+    if (!inventoryItem) {
+      if (deltaQty < 0) {
+        throw new AppError(
+          `insufficient stock adjustment for item: ${refItem.name}`,
+          400,
+        );
+      }
+
+      await Inventory.create(
+        {
+          tenant_id: tenantId,
+          product_catalog_id: refItem.product_catalog_id || null,
+          name: refItem.name,
+          brand: refItem.brand,
+          product_qty: deltaQty,
+          hsn_code: refItem.hsn_code,
+          unit_name: refItem.unit_name,
+          unit_qty: refItem.unit_qty,
+          mrp: Number(refItem.mrp || 0),
+          rate: Number.isFinite(Number(refItem.rate))
+            ? Number(refItem.rate)
+            : null,
+        },
+        { transaction },
+      );
+
+      continue;
+    }
+
+    const nextQty = Number(inventoryItem.product_qty || 0) + deltaQty;
+
+    if (nextQty < 0) {
+      throw new AppError(
+        `insufficient stock for edit on item: ${refItem.name}`,
+        400,
+      );
+    }
+
+    inventoryItem.product_qty = nextQty;
+
+    if (Number.isFinite(Number(refItem.mrp))) {
+      inventoryItem.mrp = Number(refItem.mrp);
+    }
+
+    if (Number.isFinite(Number(refItem.rate))) {
+      inventoryItem.rate = Number(refItem.rate);
+    }
+
+    await inventoryItem.save({ transaction });
+  }
+}
 
 exports.getInvoices = catchAsync(async (req, res) => {
   const tenant = req.tenant;
@@ -231,6 +373,239 @@ exports.updateInvoiceDate = catchAsync(async (req, res, next) => {
     result: {
       id: updatedInvoice.id,
       createdAt: updatedInvoice.createdAt,
+    },
+  });
+});
+
+exports.editInvoice = catchAsync(async (req, res, next) => {
+  const tenant = req.tenant;
+  const invoiceId = req.params.id;
+
+  const payloadItems = Array.isArray(req.body?.invoiceItemsDetails)
+    ? req.body.invoiceItemsDetails
+    : [];
+
+  if (payloadItems.length === 0) {
+    return next(new AppError("at least one invoice item is required", 400));
+  }
+
+  const result = await Invoice.sequelize.transaction(async (transaction) => {
+    const invoice = await Invoice.findOne({
+      where: { id: invoiceId, tenant_id: tenant.id },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+
+    if (!invoice) {
+      throw new AppError("invoice not found", 404);
+    }
+
+    if (String(invoice.bill_state || "") === "paid") {
+      throw new AppError("fully paid invoices cannot be edited", 400);
+    }
+
+    const existingItems = await InvoiceItem.findAll({
+      where: { invoice_id: invoice.id },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+
+    const defaultCgst = Number(existingItems?.[0]?.cgst || 0);
+    const defaultSgst = Number(existingItems?.[0]?.sgst || 0);
+
+    const normalizedItems = payloadItems.map((item) => {
+      const normalized = {
+        name: String(item.name || "").trim(),
+        brand: String(item.brand || "").trim(),
+        hsn_code: String(item.hsn_code || "").trim(),
+        unit_name: String(item.unit_name || "").trim(),
+        unit_qty: Number(item.unit_qty || 0),
+        product_qty: Number(item.product_qty || 0),
+        rate: Number(item.rate || 0),
+        mrp: Number(item.mrp || 0),
+        cgst: Number(
+          item.cgst ??
+            req.body?.taxDetails?.cgst ??
+            defaultCgst,
+        ),
+        sgst: Number(
+          item.sgst ??
+            req.body?.taxDetails?.sgst ??
+            defaultSgst,
+        ),
+        discount: Number(item.discount || 0),
+        product_catalog_id: item.product_catalog_id || null,
+      };
+
+      if (
+        !normalized.name ||
+        !normalized.brand ||
+        !normalized.hsn_code ||
+        !normalized.unit_name
+      ) {
+        throw new AppError("invoice item has missing required fields", 400);
+      }
+
+      if (!Number.isFinite(normalized.unit_qty) || normalized.unit_qty <= 0) {
+        throw new AppError("item unit quantity must be greater than zero", 400);
+      }
+
+      if (
+        !Number.isFinite(normalized.product_qty) ||
+        normalized.product_qty <= 0
+      ) {
+        throw new AppError("item quantity must be greater than zero", 400);
+      }
+
+      if (!Number.isFinite(normalized.rate) || normalized.rate < 0) {
+        throw new AppError("item rate must be a non-negative number", 400);
+      }
+
+      if (
+        !Number.isFinite(normalized.discount) ||
+        normalized.discount < 0 ||
+        normalized.discount > 100
+      ) {
+        throw new AppError("item discount must be between 0 and 100", 400);
+      }
+
+      if (!Number.isFinite(normalized.cgst) || normalized.cgst < 0) {
+        throw new AppError("cgst must be a non-negative number", 400);
+      }
+
+      if (!Number.isFinite(normalized.sgst) || normalized.sgst < 0) {
+        throw new AppError("sgst must be a non-negative number", 400);
+      }
+
+      return {
+        ...normalized,
+        total_amount: normalized.rate * normalized.product_qty,
+      };
+    });
+
+    const { sub_total, grand_total, cgst_total, sgst_total, discount_total } =
+      calculateInvoiceData(normalizedItems);
+
+    const paidResult = await Payment.findOne({
+      attributes: [
+        [
+          Invoice.sequelize.fn(
+            "COALESCE",
+            Invoice.sequelize.fn("SUM", Invoice.sequelize.col("amount")),
+            0,
+          ),
+          "paid_amount",
+        ],
+      ],
+      where: { invoice_id: invoice.id },
+      raw: true,
+      transaction,
+    });
+
+    const paidAmount = Number(paidResult?.paid_amount || 0);
+    if (paidAmount > Number(grand_total)) {
+      throw new AppError(
+        "cannot edit invoice: paid amount exceeds recalculated total",
+        400,
+      );
+    }
+
+    const pending_amount = Number((grand_total - paidAmount).toFixed(2));
+    const bill_state =
+      pending_amount === 0 ? "paid" : paidAmount > 0 ? "partial" : "pending";
+
+    const editablePartyFields =
+      invoice.invoice_type === "stock_out"
+        ? {
+            invoice_to: String(
+              req.body?.invoiceDetails?.invoice_to ?? invoice.invoice_to,
+            ).trim(),
+            address_to: String(
+              req.body?.invoiceDetails?.address_to ?? invoice.address_to,
+            ).trim(),
+            phone_to: String(
+              req.body?.invoiceDetails?.phone_to ?? invoice.phone_to,
+            ).trim(),
+            other_party_gst: String(
+              req.body?.invoiceDetails?.other_party_gst ?? invoice.other_party_gst,
+            )
+              .trim()
+              .toUpperCase(),
+          }
+        : {
+            invoice_from: String(
+              req.body?.invoiceDetails?.invoice_from ?? invoice.invoice_from,
+            ).trim(),
+            address_from: String(
+              req.body?.invoiceDetails?.address_from ?? invoice.address_from,
+            ).trim(),
+            phone_from: String(
+              req.body?.invoiceDetails?.phone_from ?? invoice.phone_from,
+            ).trim(),
+            other_party_gst: String(
+              req.body?.invoiceDetails?.other_party_gst ?? invoice.other_party_gst,
+            )
+              .trim()
+              .toUpperCase(),
+          };
+
+    for (const value of Object.values(editablePartyFields)) {
+      if (!String(value || "").trim()) {
+        throw new AppError("party details cannot be empty", 400);
+      }
+    }
+
+    await applyInventoryDelta({
+      tenantId: tenant.id,
+      invoiceType: invoice.invoice_type,
+      oldItems: existingItems.map((item) => item.toJSON()),
+      newItems: normalizedItems,
+      transaction,
+    });
+
+    await InvoiceItem.destroy({
+      where: { invoice_id: invoice.id },
+      transaction,
+    });
+
+    await InvoiceItem.bulkCreate(
+      normalizedItems.map((item) => ({ ...item, invoice_id: invoice.id })),
+      {
+        transaction,
+      },
+    );
+
+    await invoice.update(
+      {
+        ...editablePartyFields,
+        sub_total,
+        grand_total,
+        cgst_total,
+        sgst_total,
+        discount_total,
+        pending_amount,
+        bill_state,
+      },
+      { transaction },
+    );
+
+    const refreshedItems = await InvoiceItem.findAll({
+      where: { invoice_id: invoice.id },
+      order: [["createdAt", "ASC"]],
+      transaction,
+    });
+
+    return {
+      invoice,
+      invoice_items: refreshedItems,
+    };
+  });
+
+  res.status(200).json({
+    status: "success",
+    result: {
+      ...result.invoice.toJSON(),
+      invoice_items: result.invoice_items,
     },
   });
 });
