@@ -7,6 +7,87 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { promisify } = require("util");
 const { generateSlug } = require("../utilities/generateTenantSlug");
+const { Op } = require("sequelize");
+
+const normalizeTenantPaymentDetails = (payload = {}) => {
+  const account_number = String(payload.account_number || "")
+    .replace(/\s+/g, "")
+    .trim();
+  const ifsc_code = String(payload.ifsc_code || "")
+    .replace(/\s+/g, "")
+    .toUpperCase();
+  const qr_url = String(payload.qr_url || "").trim();
+
+  return {
+    account_number,
+    ifsc_code,
+    qr_url,
+  };
+};
+
+const normalizeUserProfileDetails = (payload = {}) => {
+  const name = String(payload.name || "").trim();
+  const email = String(payload.email || "")
+    .trim()
+    .toLowerCase();
+  const current_password = String(payload.current_password || "");
+  const new_password = String(payload.new_password || "");
+
+  return {
+    name,
+    email,
+    current_password,
+    new_password,
+  };
+};
+
+const normalizeTenantProfileDetails = (payload = {}) => {
+  const cname = String(payload.cname || "").trim();
+  const caddress = String(payload.caddress || "").trim();
+  const cphone_number = String(payload.cphone_number || "")
+    .replace(/\s+/g, "")
+    .trim();
+  const gstin = String(payload.gstin || "")
+    .replace(/\s+/g, "")
+    .toUpperCase();
+  const account_number = String(payload.account_number || "")
+    .replace(/\s+/g, "")
+    .trim();
+  const ifsc_code = String(payload.ifsc_code || "")
+    .replace(/\s+/g, "")
+    .toUpperCase();
+  const qr_url = String(payload.qr_url || "").trim();
+
+  return {
+    cname,
+    caddress,
+    cphone_number,
+    gstin,
+    account_number,
+    ifsc_code,
+    qr_url,
+  };
+};
+
+const assertValidEmail = (email) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    throw new AppError("invalid email format", 400);
+  }
+};
+
+const assertMandatoryTenantPaymentDetails = (details) => {
+  if (!details.account_number || !details.ifsc_code || !details.qr_url) {
+    throw new AppError(
+      "account number, IFSC code and QR URL are mandatory",
+      400,
+    );
+  }
+
+  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(details.ifsc_code)) {
+    throw new AppError("invalid IFSC code format", 400);
+  }
+};
 
 const signToken = (userId, tenantId) => {
   return jwt.sign({ userId, tenantId }, process.env.JWT_SECRET, {
@@ -97,9 +178,11 @@ exports.register = catchAsync(async (req, res, next) => {
     caddress: req.body.caddress,
     cphone_number: req.body.cphone_number,
     gstin: req.body.gstin,
+    ...normalizeTenantPaymentDetails(req.body),
   };
 
   const userDetails = {
+    name: String(req.body.name || "").trim(),
     email: req.body.email,
     password: req.body.password,
   };
@@ -109,11 +192,16 @@ exports.register = catchAsync(async (req, res, next) => {
     !companyDetails.caddress ||
     !companyDetails.cphone_number ||
     !companyDetails.gstin ||
+    !companyDetails.account_number ||
+    !companyDetails.ifsc_code ||
+    !companyDetails.qr_url ||
     !userDetails.email ||
     !userDetails.password
   ) {
     return next(new AppError("invalid details", 400));
   }
+
+  assertMandatoryTenantPaymentDetails(companyDetails);
 
   // add the slug
   companyDetails.tenant_slug = generateSlug(req.body.cname);
@@ -129,6 +217,12 @@ exports.register = catchAsync(async (req, res, next) => {
     const user = await User.create(
       {
         tenant_id: tenant.id,
+        name:
+          userDetails.name ||
+          String(userDetails.email || "")
+            .split("@")[0]
+            .trim() ||
+          "Owner",
         email: userDetails.email,
         password: hashed_password,
         role: "owner",
@@ -196,6 +290,163 @@ exports.protect = catchAsync(async (req, res, next) => {
 });
 
 exports.getMe = catchAsync(async (req, res, _next) => {
+  req.user.password = undefined;
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      user: req.user,
+      tenant: req.tenant,
+    },
+  });
+});
+
+exports.updateMe = catchAsync(async (req, res, next) => {
+  const user = req.user;
+  const tenant = req.tenant;
+
+  const profileDetails = normalizeUserProfileDetails(req.body);
+  const updatePayload = {};
+
+  if (profileDetails.name && profileDetails.name !== String(user.name || "")) {
+    if (user.role !== "owner") {
+      return next(new AppError("only owner can update name", 403));
+    }
+
+    if (profileDetails.name.length > 120) {
+      return next(new AppError("name must be at most 120 characters", 400));
+    }
+
+    updatePayload.name = profileDetails.name;
+  }
+
+  if (profileDetails.email && profileDetails.email !== user.email) {
+    assertValidEmail(profileDetails.email);
+
+    const duplicateUser = await User.findOne({
+      where: {
+        tenant_id: tenant.id,
+        email: profileDetails.email,
+        id: {
+          [Op.ne]: user.id,
+        },
+      },
+      attributes: ["id"],
+    });
+
+    if (duplicateUser) {
+      return next(new AppError("email already exists in this tenant", 409));
+    }
+
+    updatePayload.email = profileDetails.email;
+  }
+
+  if (profileDetails.new_password) {
+    if (!profileDetails.current_password) {
+      return next(
+        new AppError("current password is required to set a new password", 400),
+      );
+    }
+
+    if (profileDetails.new_password.length < 6) {
+      return next(
+        new AppError("new password must be at least 6 characters", 400),
+      );
+    }
+
+    const matched = await bcrypt.compare(
+      profileDetails.current_password,
+      user.password,
+    );
+    if (!matched) {
+      return next(new AppError("current password is incorrect", 400));
+    }
+
+    updatePayload.password = await bcrypt.hash(profileDetails.new_password, 12);
+  }
+
+  if (Object.keys(updatePayload).length === 0) {
+    return next(new AppError("no profile changes provided", 400));
+  }
+
+  await user.update(updatePayload);
+  await user.reload();
+
+  user.password = undefined;
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      user,
+      tenant,
+    },
+  });
+});
+
+exports.updateTenantProfile = catchAsync(async (req, res, next) => {
+  if (req.user.role !== "owner") {
+    return next(new AppError("only owner can update tenant profile", 403));
+  }
+
+  const profileDetails = normalizeTenantProfileDetails(req.body);
+
+  if (
+    !profileDetails.cname ||
+    !profileDetails.caddress ||
+    !profileDetails.cphone_number ||
+    !profileDetails.gstin
+  ) {
+    return next(
+      new AppError("company name, address, phone and gstin are mandatory", 400),
+    );
+  }
+
+  if (
+    (profileDetails.account_number ||
+      profileDetails.ifsc_code ||
+      profileDetails.qr_url) &&
+    (!profileDetails.account_number ||
+      !profileDetails.ifsc_code ||
+      !profileDetails.qr_url)
+  ) {
+    return next(
+      new AppError(
+        "account number, IFSC code and QR URL must be provided together",
+        400,
+      ),
+    );
+  }
+
+  if (
+    profileDetails.ifsc_code &&
+    !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(profileDetails.ifsc_code)
+  ) {
+    return next(new AppError("invalid IFSC code format", 400));
+  }
+
+  await req.tenant.update(profileDetails);
+  await req.tenant.reload();
+  req.user.password = undefined;
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      user: req.user,
+      tenant: req.tenant,
+    },
+  });
+});
+
+exports.updateTenantPaymentDetails = catchAsync(async (req, res, next) => {
+  if (req.user.role !== "owner") {
+    return next(new AppError("only owner can update tenant details", 403));
+  }
+
+  const paymentDetails = normalizeTenantPaymentDetails(req.body);
+  assertMandatoryTenantPaymentDetails(paymentDetails);
+
+  await req.tenant.update(paymentDetails);
+  await req.tenant.reload();
   req.user.password = undefined;
 
   res.status(200).json({

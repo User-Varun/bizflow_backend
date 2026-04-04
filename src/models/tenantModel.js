@@ -18,16 +18,28 @@ const Tenant = sequelize.define("tenant", {
   },
 
   cname: {
-    type: DataTypes.STRING,
+    type: DataTypes.STRING(120),
   },
   caddress: {
-    type: DataTypes.STRING,
+    type: DataTypes.STRING(255),
   },
   cphone_number: {
-    type: DataTypes.STRING,
+    type: DataTypes.STRING(20),
   },
   gstin: {
-    type: DataTypes.STRING,
+    type: DataTypes.STRING(20),
+  },
+  account_number: {
+    type: DataTypes.STRING(34),
+    allowNull: true,
+  },
+  ifsc_code: {
+    type: DataTypes.STRING(11),
+    allowNull: true,
+  },
+  qr_url: {
+    type: DataTypes.TEXT,
+    allowNull: true,
   },
 
   // adding this (coz need to identify tenant uniquely at login but don't want to expose tenant_id)

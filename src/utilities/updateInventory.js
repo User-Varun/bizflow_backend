@@ -42,6 +42,10 @@ exports.updateInventory = async ({
     if (inventoryItem) {
       if (invoiceType === "stock_in") {
         inventoryItem.product_qty += item.product_qty;
+
+        if (Number.isFinite(Number(item.rate))) {
+          inventoryItem.rate = Number(item.rate);
+        }
       }
 
       if (invoiceType === "stock_out") {
@@ -71,6 +75,7 @@ exports.updateInventory = async ({
           unit_name: item.unit_name,
           unit_qty: item.unit_qty,
           mrp: item.mrp,
+          rate: Number.isFinite(Number(item.rate)) ? Number(item.rate) : null,
         },
         { transaction },
       );

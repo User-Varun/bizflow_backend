@@ -15,24 +15,38 @@ const ProductCatalog = sequelize.define("product_catalog", {
       key: "id",
     },
   },
+  dealer_id: {
+    type: DataTypes.UUID,
+    allowNull: false,
+    references: {
+      model: "dealers",
+      key: "id",
+    },
+    onDelete: "RESTRICT",
+  },
   name: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(120),
     allowNull: false,
   },
   brand: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(120),
     allowNull: false,
   },
   mrp: {
     type: DataTypes.DOUBLE,
     allowNull: false,
   },
+  rate: {
+    type: DataTypes.DOUBLE,
+    allowNull: false,
+    defaultValue: 0,
+  },
   hsn_code: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(20),
     allowNull: false,
   },
   unit_name: {
-    type: DataTypes.ENUM("pcs", "box", "jar"),
+    type: DataTypes.STRING(80),
     allowNull: false,
   },
   unit_qty: {
@@ -45,5 +59,8 @@ const ProductCatalog = sequelize.define("product_catalog", {
 module.exports = ProductCatalog;
 
 const InvoiceItem = require("./invoiceItemsModel");
+const Dealer = require("./dealerModel");
 
 ProductCatalog.hasMany(InvoiceItem, { foreignKey: "product_catalog_id" });
+ProductCatalog.belongsTo(Dealer, { foreignKey: "dealer_id" });
+Dealer.hasMany(ProductCatalog, { foreignKey: "dealer_id" });
