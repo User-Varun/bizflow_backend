@@ -3,6 +3,10 @@ const Invoice = require("../models/invoiceModel");
 const Inventory = require("../models/inventoryModel");
 const { Op } = require("sequelize");
 
+function toTwoDecimal(value) {
+  return Number(Number(value || 0).toFixed(2));
+}
+
 exports.getSummary = catchAsync(async (req, res) => {
   const tenant = req.tenant;
   const lowStockThreshold = Math.max(
@@ -70,13 +74,13 @@ exports.getSummary = catchAsync(async (req, res) => {
   res.status(200).json({
     status: "success",
     result: {
-      total_invoices_current_month: totalInvoicesCurrentMonth,
-      stock_out_total_current_month: Number(stockOutTotalCurrentMonth || 0),
-      stock_in_total_current_month: Number(stockInTotalCurrentMonth || 0),
-      pending_receivable_total: Number(pendingReceivableTotal || 0),
-      pending_payable_total: Number(pendingPayableTotal || 0),
-      low_stock_item_count: lowStockItemCount,
-      low_stock_threshold: lowStockThreshold,
+      total_invoices_current_month: toTwoDecimal(totalInvoicesCurrentMonth),
+      stock_out_total_current_month: toTwoDecimal(stockOutTotalCurrentMonth),
+      stock_in_total_current_month: toTwoDecimal(stockInTotalCurrentMonth),
+      pending_receivable_total: toTwoDecimal(pendingReceivableTotal),
+      pending_payable_total: toTwoDecimal(pendingPayableTotal),
+      low_stock_item_count: toTwoDecimal(lowStockItemCount),
+      low_stock_threshold: toTwoDecimal(lowStockThreshold),
       month_start: startOfMonth,
       next_month_start: startOfNextMonth,
     },
