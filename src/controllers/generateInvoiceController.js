@@ -165,10 +165,10 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
           ),
         ];
 
-        let validCatalogIdSet = new Set();
+        let catalogById = new Map();
         if (requestedCatalogIds.length > 0) {
           const catalogRows = await ProductCatalog.findAll({
-            attributes: ["id"],
+            attributes: ["id", "dealer_id"],
             where: {
               tenant_id: tenant.id,
               id: { [Op.in]: requestedCatalogIds },
@@ -176,24 +176,47 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
             transaction,
           });
 
-          validCatalogIdSet = new Set(catalogRows.map((row) => row.id));
+          catalogById = new Map(catalogRows.map((row) => [row.id, row]));
         }
 
         const normalizedInvoiceItems = invoiceItems.map((item) => {
-          let resolvedProductCatalogId = null;
+          const requestedCatalogId = String(
+            item.product_catalog_id || "",
+          ).trim();
 
           if (
-            item.product_catalog_id &&
-            validCatalogIdSet.has(item.product_catalog_id)
+            invoiceDetails.invoice_type === "stock_in" &&
+            !requestedCatalogId
           ) {
-            resolvedProductCatalogId = item.product_catalog_id;
-          }
-
-          if (item.product_catalog_id && !resolvedProductCatalogId) {
             throw new AppError(
-              `invalid product_catalog_id for item: ${item.name}`,
+              `product_catalog_id is required for stock_in item: ${item.name}`,
               400,
             );
+          }
+
+          let resolvedProductCatalogId = null;
+
+          if (requestedCatalogId) {
+            const catalogRow = catalogById.get(requestedCatalogId);
+
+            if (!catalogRow) {
+              throw new AppError(
+                `invalid product_catalog_id for item: ${item.name}`,
+                400,
+              );
+            }
+
+            if (
+              invoiceDetails.invoice_type === "stock_in" &&
+              catalogRow.dealer_id !== invoiceDetails.dealer_id
+            ) {
+              throw new AppError(
+                `item ${item.name} is not linked to the selected supplier`,
+                400,
+              );
+            }
+
+            resolvedProductCatalogId = catalogRow.id;
           }
 
           return {

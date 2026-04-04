@@ -15,6 +15,15 @@ const ProductCatalog = sequelize.define("product_catalog", {
       key: "id",
     },
   },
+  dealer_id: {
+    type: DataTypes.UUID,
+    allowNull: false,
+    references: {
+      model: "dealers",
+      key: "id",
+    },
+    onDelete: "RESTRICT",
+  },
   name: {
     type: DataTypes.STRING(120),
     allowNull: false,
@@ -50,5 +59,8 @@ const ProductCatalog = sequelize.define("product_catalog", {
 module.exports = ProductCatalog;
 
 const InvoiceItem = require("./invoiceItemsModel");
+const Dealer = require("./dealerModel");
 
 ProductCatalog.hasMany(InvoiceItem, { foreignKey: "product_catalog_id" });
+ProductCatalog.belongsTo(Dealer, { foreignKey: "dealer_id" });
+Dealer.hasMany(ProductCatalog, { foreignKey: "dealer_id" });

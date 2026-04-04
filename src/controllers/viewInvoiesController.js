@@ -2,6 +2,7 @@ const Invoice = require("../models/invoiceModel");
 const InvoiceItem = require("../models/invoiceItemsModel");
 const Payment = require("../models/paymentModel");
 const Inventory = require("../models/inventoryModel");
+const ProductCatalog = require("../models/productCatalogModel");
 const Dealer = require("../models/dealerModel");
 const { catchAsync } = require("../utilities/catchAsync");
 const AppError = require("../utilities/appError");
@@ -508,8 +509,74 @@ exports.editInvoice = catchAsync(async (req, res, next) => {
       };
     });
 
+    const requestedCatalogIds = [
+      ...new Set(
+        normalizedItems
+          .map((item) => String(item.product_catalog_id || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+
+    let catalogById = new Map();
+    if (requestedCatalogIds.length > 0) {
+      const catalogRows = await ProductCatalog.findAll({
+        attributes: ["id", "dealer_id"],
+        where: {
+          tenant_id: tenant.id,
+          id: {
+            [Op.in]: requestedCatalogIds,
+          },
+        },
+        transaction,
+      });
+
+      catalogById = new Map(catalogRows.map((row) => [row.id, row]));
+    }
+
+    const normalizedInvoiceItems = normalizedItems.map((item) => {
+      const requestedCatalogId = String(item.product_catalog_id || "").trim();
+
+      if (invoice.invoice_type === "stock_in" && !requestedCatalogId) {
+        throw new AppError(
+          `product_catalog_id is required for stock_in item: ${item.name}`,
+          400,
+        );
+      }
+
+      if (!requestedCatalogId) {
+        return {
+          ...item,
+          product_catalog_id: null,
+        };
+      }
+
+      const catalogRow = catalogById.get(requestedCatalogId);
+
+      if (!catalogRow) {
+        throw new AppError(
+          `invalid product_catalog_id for item: ${item.name}`,
+          400,
+        );
+      }
+
+      if (
+        invoice.invoice_type === "stock_in" &&
+        catalogRow.dealer_id !== invoice.dealer_id
+      ) {
+        throw new AppError(
+          `item ${item.name} is not linked to the invoice supplier`,
+          400,
+        );
+      }
+
+      return {
+        ...item,
+        product_catalog_id: catalogRow.id,
+      };
+    });
+
     const { sub_total, grand_total, cgst_total, sgst_total, discount_total } =
-      calculateInvoiceData(normalizedItems);
+      calculateInvoiceData(normalizedInvoiceItems);
 
     const paidResult = await Payment.findOne({
       attributes: [
@@ -586,7 +653,7 @@ exports.editInvoice = catchAsync(async (req, res, next) => {
       tenantId: tenant.id,
       invoiceType: invoice.invoice_type,
       oldItems: existingItems.map((item) => item.toJSON()),
-      newItems: normalizedItems,
+      newItems: normalizedInvoiceItems,
       transaction,
     });
 
@@ -596,7 +663,10 @@ exports.editInvoice = catchAsync(async (req, res, next) => {
     });
 
     await InvoiceItem.bulkCreate(
-      normalizedItems.map((item) => ({ ...item, invoice_id: invoice.id })),
+      normalizedInvoiceItems.map((item) => ({
+        ...item,
+        invoice_id: invoice.id,
+      })),
       {
         transaction,
       },

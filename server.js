@@ -61,6 +61,13 @@ async function ensureTenantPaymentColumns() {
   `);
 }
 
+async function ensureUserNameColumn() {
+  await sequelize.query(`
+    ALTER TABLE "users"
+    ADD COLUMN IF NOT EXISTS "name" VARCHAR(120);
+  `);
+}
+
 async function ensureProductCatalogRateColumn() {
   await sequelize.query(`
     ALTER TABLE "product_catalogs"
@@ -124,6 +131,48 @@ async function ensureDealerTable() {
   `);
 }
 
+async function ensureProductCatalogDealerColumn() {
+  await sequelize.query(`
+    ALTER TABLE "product_catalogs"
+    ADD COLUMN IF NOT EXISTS "dealer_id" UUID;
+  `);
+
+  await sequelize.query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'product_catalogs_dealer_id_fkey'
+      ) THEN
+        ALTER TABLE "product_catalogs"
+        ADD CONSTRAINT "product_catalogs_dealer_id_fkey"
+        FOREIGN KEY ("dealer_id") REFERENCES "dealers"("id") ON DELETE RESTRICT;
+      END IF;
+    END $$;
+  `);
+
+  await sequelize.query(`
+    DELETE FROM "product_catalogs" p
+    WHERE p."dealer_id" IS NULL
+       OR NOT EXISTS (
+         SELECT 1
+         FROM "dealers" d
+         WHERE d."id" = p."dealer_id"
+           AND d."tenant_id" = p."tenant_id"
+           AND d."invoice_type" = 'stock_in'
+       );
+  `);
+
+  await sequelize.query(`
+    CREATE INDEX IF NOT EXISTS "product_catalogs_tenant_dealer_created_idx"
+    ON "product_catalogs" ("tenant_id", "dealer_id", "createdAt");
+  `);
+
+  await sequelize.query(`
+    ALTER TABLE "product_catalogs"
+    ALTER COLUMN "dealer_id" SET NOT NULL;
+  `);
+}
+
 async function ensureInvoiceDealerColumn() {
   await sequelize.query(`
     ALTER TABLE "invoices"
@@ -167,8 +216,10 @@ async function server() {
     await normalizeUnitNameColumns();
     await normalizeStringLengthColumns();
     await ensureTenantPaymentColumns();
+    await ensureUserNameColumn();
     await ensureProductCatalogRateColumn();
     await ensureDealerTable();
+    await ensureProductCatalogDealerColumn();
     await ensureInvoiceDealerColumn();
 
     app.listen(port, () => {
