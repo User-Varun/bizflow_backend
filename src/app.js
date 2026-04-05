@@ -36,9 +36,7 @@ const allowedOrigins = (
   .filter(Boolean);
 
 const isBizFlowRenderFrontend = (origin) => {
-  return /^https:\/\/bizflow-frontend-[a-z0-9-]+\.onrender\.com$/i.test(
-    origin,
-  );
+  return /^https:\/\/bizflow-frontend-[a-z0-9-]+\.onrender\.com$/i.test(origin);
 };
 
 const isDevLocalOrigin = (origin) => {
