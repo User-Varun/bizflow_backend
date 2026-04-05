@@ -1,4 +1,14 @@
-require("dotenv").config({ path: "./config.env" });
+const path = require("path");
+const dotenv = require("dotenv");
+
+const nodeEnv = process.env.NODE_ENV || "development";
+const envPath = path.resolve(__dirname, `.env.${nodeEnv}`);
+
+// Load base config first, then optional environment overrides.
+// dotenv does not overwrite existing keys unless override=true.
+dotenv.config({ path: path.resolve(__dirname, "config.env") });
+dotenv.config({ path: envPath });
+
 const app = require("./src/app");
 const sequelize = require("./src/config/db");
 
