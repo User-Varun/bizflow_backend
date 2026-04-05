@@ -23,14 +23,23 @@ app.get("/api/v1/health", (req, res) => {
 // Needed behind proxies (e.g. Render) so secure cookies / protocol checks work.
 app.set("trust proxy", 1);
 
+const normalizeOrigin = (origin = "") => origin.trim().replace(/\/$/, "");
+
 const allowedOrigins = (
+  process.env.CORS_ORIGINS ||
   process.env.FRONTEND_URLS ||
   process.env.FRONTEND_URL ||
   "http://localhost:5173"
 )
   .split(",")
-  .map((origin) => origin.trim().replace(/\/$/, ""))
+  .map((origin) => normalizeOrigin(origin))
   .filter(Boolean);
+
+const isBizFlowRenderFrontend = (origin) => {
+  return /^https:\/\/bizflow-frontend-[a-z0-9-]+\.onrender\.com$/i.test(
+    origin,
+  );
+};
 
 const isDevLocalOrigin = (origin) => {
   if (process.env.NODE_ENV === "production") return false;
@@ -43,11 +52,17 @@ const corsOptions = {
     // Allow tools like Postman / server-to-server (no browser origin)
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.includes(origin) || isDevLocalOrigin(origin)) {
+    const normalizedOrigin = normalizeOrigin(origin);
+
+    if (
+      allowedOrigins.includes(normalizedOrigin) ||
+      isDevLocalOrigin(normalizedOrigin) ||
+      isBizFlowRenderFrontend(normalizedOrigin)
+    ) {
       return callback(null, true);
     }
 
-    return callback(new Error(`Not allowed by CORS: ${origin}`));
+    return callback(new Error(`Not allowed by CORS: ${normalizedOrigin}`));
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
