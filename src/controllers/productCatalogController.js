@@ -2,6 +2,7 @@
 
 const AppError = require("../utilities/appError");
 const ProductCatalog = require("../models/productCatalogModel");
+const Inventory = require("../models/inventoryModel");
 const Dealer = require("../models/dealerModel");
 const { catchAsync } = require("../utilities/catchAsync");
 const { Op } = require("sequelize");
@@ -24,9 +25,7 @@ function normalizePayload(payload = {}) {
     mrp: payload.mrp,
     rate: payload.rate,
     hsn_code: String(payload.hsn_code || "").trim(),
-    unit_name: String(payload.unit_name || "")
-      .trim()
-      .toLowerCase(),
+    unit_name: String(payload.unit_name || "").trim(),
     unit_qty: payload.unit_qty,
   };
 }
@@ -214,21 +213,48 @@ exports.updateProductDetails = catchAsync(async (req, res, next) => {
 
   productDetails.dealer_id = supplierDealer.id;
 
-  const [updatedRows] = await ProductCatalog.update(productDetails, {
-    where: { id: productId, tenant_id: tenant.id },
-  });
+  let product = null;
 
-  if (!updatedRows) return next(new AppError("product not found", 404));
+  await ProductCatalog.sequelize.transaction(async (transaction) => {
+    const [updatedRows] = await ProductCatalog.update(productDetails, {
+      where: { id: productId, tenant_id: tenant.id },
+      transaction,
+    });
 
-  const product = await ProductCatalog.findOne({
-    where: { id: productId, tenant_id: tenant.id },
-    include: [
+    if (!updatedRows) throw new AppError("product not found", 404);
+
+    // Keep current in-stock inventory cards aligned with catalog metadata edits.
+    await Inventory.update(
       {
-        model: Dealer,
-        attributes: ["id", "name", "phone", "gst"],
-        required: false,
+        name: productDetails.name,
+        brand: productDetails.brand,
+        hsn_code: productDetails.hsn_code,
+        unit_name: productDetails.unit_name,
+        unit_qty: productDetails.unit_qty,
+        mrp: productDetails.mrp,
+        rate: productDetails.rate,
       },
-    ],
+      {
+        where: {
+          tenant_id: tenant.id,
+          product_catalog_id: productId,
+          product_qty: { [Op.gt]: 0 },
+        },
+        transaction,
+      },
+    );
+
+    product = await ProductCatalog.findOne({
+      where: { id: productId, tenant_id: tenant.id },
+      include: [
+        {
+          model: Dealer,
+          attributes: ["id", "name", "phone", "gst"],
+          required: false,
+        },
+      ],
+      transaction,
+    });
   });
 
   res.status(200).json({
