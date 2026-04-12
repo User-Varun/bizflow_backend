@@ -22,6 +22,10 @@ const Invoice = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false, // unique-ness per tenant (not global) is defined by index
     },
+    supplier_invoice_number: {
+      type: DataTypes.STRING(120),
+      allowNull: true,
+    },
     invoice_type: {
       type: DataTypes.ENUM("stock_in", "stock_out"),
       allowNull: false,

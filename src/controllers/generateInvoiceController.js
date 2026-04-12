@@ -75,10 +75,21 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
   // auto-filling customer data based on invoice_type
   if (req.body.invoiceDetails.invoice_type === "stock_in") {
     const { invoice_type } = req.body.invoiceDetails;
+    const supplierInvoiceNumber = String(
+      req.body?.invoiceDetails?.supplier_invoice_number || "",
+    ).trim();
+
+    if (!supplierInvoiceNumber) {
+      throw new AppError(
+        "supplier invoice number is required for stock_in",
+        400,
+      );
+    }
 
     invoiceDetails = {
       invoice_type,
       dealer_id: selectedDealer.id,
+      supplier_invoice_number: supplierInvoiceNumber,
       invoice_from: String(selectedDealer.name || "").trim(),
       address_from: String(selectedDealer.address || "").trim(),
       phone_from: String(selectedDealer.phone || "").trim(),
@@ -97,6 +108,7 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
     invoiceDetails = {
       invoice_type,
       dealer_id: selectedDealer.id,
+      supplier_invoice_number: null,
       invoice_to: String(selectedDealer.name || "").trim(),
       address_to: String(selectedDealer.address || "").trim(),
       phone_to: String(selectedDealer.phone || "").trim(),
@@ -256,13 +268,10 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
           if (amount === 0) {
             pending_amount = grand_total;
             bill_state = "pending";
-          }
-
-          if (amount < grand_total) {
+          } else if (amount < grand_total) {
             pending_amount = grand_total - amount;
             bill_state = "partial";
-          }
-          if (amount === grand_total) {
+          } else if (amount === grand_total) {
             pending_amount = 0;
             bill_state = "paid";
           }

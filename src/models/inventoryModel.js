@@ -60,3 +60,7 @@ const Inventory = sequelize.define("inventory", {
 });
 
 module.exports = Inventory;
+
+const ProductCatalog = require("./productCatalogModel");
+
+Inventory.belongsTo(ProductCatalog, { foreignKey: "product_catalog_id" });

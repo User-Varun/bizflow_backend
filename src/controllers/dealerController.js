@@ -419,6 +419,9 @@ exports.getDealerLedgerStatement = catchAsync(async (req, res, next) => {
     attributes: [
       "id",
       "invoice_number",
+      "supplier_invoice_number",
+      "invoice_to",
+      "invoice_from",
       "grand_total",
       "pending_amount",
       "bill_state",
@@ -450,7 +453,13 @@ exports.getDealerLedgerStatement = catchAsync(async (req, res, next) => {
       row_id: `invoice:${invoice.id}`,
       row_type: "invoice",
       invoice_id: invoice.id,
-      invoice_number: invoice.invoice_number,
+      invoice_number:
+        invoiceType === "stock_in" &&
+        String(invoice.supplier_invoice_number || "").trim()
+          ? invoice.supplier_invoice_number
+          : invoice.invoice_number,
+      other_party_name:
+        invoiceType === "stock_in" ? invoice.invoice_to : invoice.invoice_from,
       amount: Number(invoice.grand_total || 0),
       payment_method: null,
       bill_state: invoice.bill_state,
@@ -462,6 +471,10 @@ exports.getDealerLedgerStatement = catchAsync(async (req, res, next) => {
       row_type: "payment",
       invoice_id: payment.invoice_id,
       invoice_number: invoiceMap.get(payment.invoice_id)?.invoice_number || "",
+      other_party_name:
+        invoiceType === "stock_in"
+          ? invoiceMap.get(payment.invoice_id)?.invoice_to || ""
+          : invoiceMap.get(payment.invoice_id)?.invoice_from || "",
       amount: Number(payment.amount || 0),
       payment_method: payment.payment_method,
       bill_state: invoiceMap.get(payment.invoice_id)?.bill_state || "",

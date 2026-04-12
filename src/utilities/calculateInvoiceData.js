@@ -1,5 +1,5 @@
 exports.calculateInvoiceData = function (invoiceItems) {
-  const roundToNearestDigit = (value) => Number(Number(value || 0).toFixed(2));
+  const toTwoDecimal = (value) => Number(Number(value || 0).toFixed(2));
 
   // calculate cgst
 
@@ -21,13 +21,16 @@ exports.calculateInvoiceData = function (invoiceItems) {
     discount_total += discountAmount;
   });
 
-  grand_total = sub_total + cgst_total + sgst_total - discount_total;
+  const raw_grand_total = sub_total + cgst_total + sgst_total - discount_total;
+  grand_total = Math.round(raw_grand_total);
+  const round_off = toTwoDecimal(grand_total - raw_grand_total);
 
   return {
-    sub_total: roundToNearestDigit(sub_total),
-    grand_total: roundToNearestDigit(grand_total),
-    cgst_total: roundToNearestDigit(cgst_total),
-    sgst_total: roundToNearestDigit(sgst_total),
-    discount_total: roundToNearestDigit(discount_total),
+    sub_total: toTwoDecimal(sub_total),
+    grand_total,
+    round_off,
+    cgst_total: toTwoDecimal(cgst_total),
+    sgst_total: toTwoDecimal(sgst_total),
+    discount_total: toTwoDecimal(discount_total),
   };
 };

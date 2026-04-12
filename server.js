@@ -219,6 +219,13 @@ async function ensureInvoiceDealerColumn() {
   `);
 }
 
+async function ensureInvoiceSupplierInvoiceNumberColumn() {
+  await sequelize.query(`
+    ALTER TABLE "invoices"
+    ADD COLUMN IF NOT EXISTS "supplier_invoice_number" VARCHAR(120);
+  `);
+}
+
 async function server() {
   try {
     await sequelize.authenticate();
@@ -231,6 +238,7 @@ async function server() {
     await ensureDealerTable();
     await ensureProductCatalogDealerColumn();
     await ensureInvoiceDealerColumn();
+    await ensureInvoiceSupplierInvoiceNumberColumn();
 
     app.listen(port, () => {
       console.log("DB connected successfully!");

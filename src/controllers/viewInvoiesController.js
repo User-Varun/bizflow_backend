@@ -169,6 +169,9 @@ exports.getInvoices = catchAsync(async (req, res) => {
   const billType = String(req.query.billType || "all")
     .trim()
     .toLowerCase();
+  const billState = String(req.query.billState || "all")
+    .trim()
+    .toLowerCase();
   const dealerId = String(req.query.dealerId || "").trim();
 
   const where = {
@@ -177,6 +180,16 @@ exports.getInvoices = catchAsync(async (req, res) => {
 
   if (billType === "stock_in" || billType === "stock_out") {
     where.invoice_type = billType;
+  }
+
+  if (
+    billState === "pending" ||
+    billState === "partial" ||
+    billState === "paid"
+  ) {
+    where.bill_state = billState;
+  } else if (billState === "open") {
+    where.pending_amount = { [Op.gt]: 0 };
   }
 
   if (dealerId) {
@@ -204,9 +217,18 @@ exports.getInvoices = catchAsync(async (req, res) => {
 
   if (search) {
     if (searchFilter === "invoice_number") {
-      where.invoice_number = {
-        [Op.iLike]: `%${search}%`,
-      };
+      where[Op.or] = [
+        {
+          invoice_number: {
+            [Op.iLike]: `%${search}%`,
+          },
+        },
+        {
+          supplier_invoice_number: {
+            [Op.iLike]: `%${search}%`,
+          },
+        },
+      ];
     }
 
     if (searchFilter === "invoice_to") {
@@ -641,9 +663,24 @@ exports.editInvoice = catchAsync(async (req, res, next) => {
             )
               .trim()
               .toUpperCase(),
+            supplier_invoice_number: String(
+              req.body?.invoiceDetails?.supplier_invoice_number ??
+                invoice.supplier_invoice_number ??
+                "",
+            ).trim(),
           };
 
-    for (const value of Object.values(editablePartyFields)) {
+    const fieldsToValidate =
+      invoice.invoice_type === "stock_out"
+        ? Object.values(editablePartyFields)
+        : [
+            editablePartyFields.invoice_from,
+            editablePartyFields.address_from,
+            editablePartyFields.phone_from,
+            editablePartyFields.other_party_gst,
+          ];
+
+    for (const value of fieldsToValidate) {
       if (!String(value || "").trim()) {
         throw new AppError("party details cannot be empty", 400);
       }
