@@ -34,6 +34,14 @@ const User = sequelize.define(
       type: DataTypes.ENUM("owner", "staff"),
       allowNull: false,
     },
+    reset_token_hash: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    reset_token_expires_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
 
     // timestamps createdAt, updatedAt are added by default
   },
