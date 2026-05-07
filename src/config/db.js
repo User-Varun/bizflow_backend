@@ -1,10 +1,24 @@
 const { Sequelize } = require("sequelize");
 
-const connectionURI = process.env.SUPABASE_CONNECTION_STRING.replace(
+const { SUPABASE_CONNECTION_STRING, SUPABASE_PASSWORD } = process.env;
+
+if (!SUPABASE_CONNECTION_STRING) {
+  throw new Error(
+    "Missing SUPABASE_CONNECTION_STRING. Set it in config.env or .env.<env>.",
+  );
+}
+
+if (!SUPABASE_PASSWORD) {
+  throw new Error(
+    "Missing SUPABASE_PASSWORD. Set it in config.env or .env.<env>.",
+  );
+}
+
+const connectionURI = SUPABASE_CONNECTION_STRING.replace(
   "[YOUR-PASSWORD]",
-  process.env.SUPABASE_PASSWORD,
+  SUPABASE_PASSWORD,
 );
 
-const sequelize = new Sequelize(connectionURI);
+const sequelize = new Sequelize(connectionURI)
 
 module.exports = sequelize;

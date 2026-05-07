@@ -8,6 +8,8 @@ const jwt = require("jsonwebtoken");
 const { promisify } = require("util");
 const { generateSlug } = require("../utilities/generateTenantSlug");
 const { Op } = require("sequelize");
+const crypto = require("crypto");
+const { sendPasswordResetEmail } = require("../utilities/email");
 
 const normalizeTenantPaymentDetails = (payload = {}) => {
   const account_number = String(payload.account_number || "")
@@ -93,6 +95,24 @@ const signToken = (userId, tenantId) => {
   return jwt.sign({ userId, tenantId }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN,
   });
+};
+
+const buildResetUrl = (resetToken) => {
+  const baseUrl = (process.env.FRONTEND_URL || "http://localhost:5173")
+    .trim()
+    .replace(/\/$/, "");
+  return `${baseUrl}/reset-password?token=${resetToken}`;
+};
+
+const buildPasswordResetToken = () => {
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  const resetTokenHash = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+  const resetTokenExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+  return { resetToken, resetTokenHash, resetTokenExpiresAt };
 };
 
 const getCookieOptions = (req, expires) => {
@@ -250,6 +270,97 @@ exports.logout = (_req, res, _next) => {
     status: "success",
   });
 };
+
+exports.forgotPassword = catchAsync(async (req, res, _next) => {
+  const tenant_slug = String(req.body.tenant_slug || "").trim();
+  const email = String(req.body.email || "")
+    .trim()
+    .toLowerCase();
+
+  if (!tenant_slug || !email) {
+    throw new AppError("tenant code and email are required", 400);
+  }
+
+  const tenant = await Tenant.findOne({ where: { tenant_slug } });
+  if (!tenant) {
+    return res.status(200).json({
+      status: "success",
+      message: "If an account exists for that email, a reset link has been sent.",
+    });
+  }
+
+  const user = await User.findOne({
+    where: { email, tenant_id: tenant.id },
+  });
+
+  if (!user) {
+    return res.status(200).json({
+      status: "success",
+      message: "If an account exists for that email, a reset link has been sent.",
+    });
+  }
+
+  const { resetToken, resetTokenHash, resetTokenExpiresAt } =
+    buildPasswordResetToken();
+
+  await user.update({
+    reset_token_hash: resetTokenHash,
+    reset_token_expires_at: resetTokenExpiresAt,
+  });
+
+  const resetUrl = buildResetUrl(resetToken);
+  await sendPasswordResetEmail({
+    to: user.email,
+    name: user.name,
+    resetUrl,
+  });
+
+  return res.status(200).json({
+    status: "success",
+    message: "If an account exists for that email, a reset link has been sent.",
+  });
+});
+
+exports.resetPassword = catchAsync(async (req, res, _next) => {
+  const token = String(req.body.token || "").trim();
+  const password = String(req.body.password || "");
+
+  if (!token || !password) {
+    throw new AppError("token and new password are required", 400);
+  }
+
+  if (password.length < 6) {
+    throw new AppError("password must be at least 6 characters", 400);
+  }
+
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+  const user = await User.findOne({
+    where: {
+      reset_token_hash: tokenHash,
+      reset_token_expires_at: {
+        [Op.gt]: new Date(),
+      },
+    },
+  });
+
+  if (!user) {
+    throw new AppError("reset token is invalid or expired", 400);
+  }
+
+  const hashed_password = await bcrypt.hash(password, 12);
+
+  await user.update({
+    password: hashed_password,
+    reset_token_hash: null,
+    reset_token_expires_at: null,
+  });
+
+  return res.status(200).json({
+    status: "success",
+    message: "Password updated successfully",
+  });
+});
 
 exports.protect = catchAsync(async (req, res, next) => {
   // check the token (in cookie or header )

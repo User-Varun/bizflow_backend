@@ -4,9 +4,7 @@ const dotenv = require("dotenv");
 const nodeEnv = process.env.NODE_ENV || "development";
 const envPath = path.resolve(__dirname, `.env.${nodeEnv}`);
 
-// Load base config first, then optional environment overrides.
-// dotenv does not overwrite existing keys unless override=true.
-dotenv.config({ path: path.resolve(__dirname, "config.env") });
+// Load environment-specific config only.
 dotenv.config({ path: envPath });
 
 const app = require("./src/app");
@@ -75,6 +73,14 @@ async function ensureUserNameColumn() {
   await sequelize.query(`
     ALTER TABLE "users"
     ADD COLUMN IF NOT EXISTS "name" VARCHAR(120);
+  `);
+}
+
+async function ensureUserPasswordResetColumns() {
+  await sequelize.query(`
+    ALTER TABLE "users"
+    ADD COLUMN IF NOT EXISTS "reset_token_hash" VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS "reset_token_expires_at" TIMESTAMP WITH TIME ZONE;
   `);
 }
 
@@ -234,6 +240,7 @@ async function server() {
     await normalizeStringLengthColumns();
     await ensureTenantPaymentColumns();
     await ensureUserNameColumn();
+    await ensureUserPasswordResetColumns();
     await ensureProductCatalogRateColumn();
     await ensureDealerTable();
     await ensureProductCatalogDealerColumn();

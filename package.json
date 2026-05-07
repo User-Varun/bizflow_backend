@@ -21,6 +21,7 @@
     "express": "^5.2.1",
     "archiver": "^5.3.1",
     "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^6.9.14",
     "pdfkit": "^0.13.0",
     "puppeteer": "^21.3.8",
     "pg": "^8.20.0",
