@@ -19,6 +19,6 @@ const connectionURI = SUPABASE_CONNECTION_STRING.replace(
   SUPABASE_PASSWORD,
 );
 
-const sequelize = new Sequelize(connectionURI)
+const sequelize = new Sequelize(connectionURI);
 
 module.exports = sequelize;

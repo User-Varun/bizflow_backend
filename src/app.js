@@ -12,6 +12,7 @@ const GenerateInvoicesRouter = require("./routes/generateInvoiceRoutes");
 const ViewInvoicesRouter = require("./routes/viewInvoicesRotues");
 const DealersRouter = require("./routes/dealerRoutes");
 const AuthRouter = require("./routes/authRoutes");
+const ReportsRouter = require("./routes/reportsRoutes");
 
 app.get("/api/v1/health", (req, res) => {
   // health check
@@ -87,6 +88,7 @@ app.use("/api/v1/productCatalog", ProductCatalogRouter);
 app.use("/api/v1/generateInvoice", GenerateInvoicesRouter);
 app.use("/api/v1/viewInvoices", ViewInvoicesRouter);
 app.use("/api/v1/dealers", DealersRouter);
+app.use("/api/v1/reports", ReportsRouter);
 
 // invalid routes
 app.use((req, _res, next) => {
