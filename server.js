@@ -1,11 +1,20 @@
 const path = require("path");
+const fs = require("fs");
 const dotenv = require("dotenv");
 
 const nodeEnv = process.env.NODE_ENV || "development";
-const envPath = path.resolve(__dirname, `.env.${nodeEnv}`);
+const envCandidates = [
+  path.resolve(__dirname, `.env.${nodeEnv}`),
+  path.resolve(__dirname, "config.env"),
+  path.resolve(__dirname, ".env"),
+];
+
+const envPath = envCandidates.find((candidate) => fs.existsSync(candidate));
 
 // Load environment-specific config only.
-dotenv.config({ path: envPath });
+if (envPath) {
+  dotenv.config({ path: envPath });
+}
 
 const app = require("./src/app");
 const sequelize = require("./src/config/db");
